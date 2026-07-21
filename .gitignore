@@ -1,0 +1,9 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Runtime outputs: may be large, transient, or contain time-sensitive research data.
+data/
+reports/
+cache/
