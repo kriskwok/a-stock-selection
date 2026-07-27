@@ -1,3 +1,4 @@
 requests>=2.31
 pandas>=2.0
 mootdx>=0.10
+exchange_calendars>=4.13

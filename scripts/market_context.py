@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from data_sources import ResilientHttpClient, get_default_client
+from market_utils import eastmoney_secid
 
 
 ZTB_UT = "7eea3edcaed734bea9cbfc24409ed989"
@@ -68,27 +69,38 @@ def calculate_theme_resonance(
     ths_hot: list[dict[str, Any]] | None,
     em_hot: list[dict[str, Any]] | None,
     industries: list[dict[str, Any]] | None,
+    concept_blocks: dict[str, list[str]] | None = None,
+    board_funds: list[dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, Any]]:
     ths_codes = {str(row.get("code") or "")[-6:] for row in (ths_hot or [])}
     em_codes = {str(row.get("code") or "")[-6:] for row in (em_hot or [])}
     leading_industries = [str(row.get("name") or "") for row in (industries or [])[:15]]
+    leading_fund_boards = [str(row.get("name") or "") for row in (board_funds or [])[:15]]
     result: dict[str, dict[str, Any]] = {}
     for candidate in candidates:
         code = str(candidate.get("股票代码") or candidate.get("code") or "")[:6]
         theme = str(candidate.get("所属主题") or candidate.get("theme") or "")
         in_ths, in_em = code in ths_codes, code in em_codes
         industry_match = any(name and (name in theme or theme in name) for name in leading_industries)
+        concepts = concept_blocks.get(code, []) if concept_blocks is not None else []
+        concept_match = any(tag and (tag in theme or theme in tag) for tag in concepts)
+        fund_match = any(name and (name in theme or theme in name) for name in leading_fund_boards)
         score = 40 + (20 if in_ths else 0) + (20 if in_em else 0)
         score += 10 if in_ths and in_em else 0
         score += 10 if industry_match else 0
+        score += 5 if concept_match else 0
+        score += 5 if fund_match else 0
         sources = [name for matched, name in ((in_ths, "同花顺热榜"), (in_em, "东方财富人气榜")) if matched]
-        verified_sources = len(sources) + (1 if industries is not None else 0)
+        verified_sources = len(sources) + (1 if industries is not None else 0) + (1 if concept_blocks is not None else 0) + (1 if board_funds is not None else 0)
         result[code] = {
             "theme_resonance": min(100.0, float(score)) if sources or industry_match else None,
             "hot_sources": sources,
             "hot_source_count": len(sources),
             "industry_breadth_match": industry_match,
-            "coverage": round(verified_sources / 3, 2),
+            "concept_tags": concepts,
+            "concept_match": concept_match,
+            "board_fund_match": fund_match,
+            "coverage": round(verified_sources / 5, 2),
             "verification": "多源共振" if len(sources) >= 2 else ("单源热度" if sources else "未验证"),
         }
     return result
@@ -113,6 +125,42 @@ def _industry_rows(client: ResilientHttpClient) -> list[dict[str, Any]]:
         }
         for row in raw
     ]
+
+
+def _board_fund_flow(client: ResilientHttpClient, board_type: str = "industry", period: str = "today") -> list[dict[str, Any]]:
+    fs = {"industry": "m:90+t:2", "concept": "m:90+t:3", "region": "m:90+t:1"}[board_type]
+    fields_by_period = {
+        "today": ("f62", "f184", "f3"), "5d": ("f164", "f165", "f109"), "10d": ("f174", "f175", "f160"),
+    }
+    main, pct, change = fields_by_period[period]
+    data = client.get_json(
+        "https://push2.eastmoney.com/api/qt/clist/get",
+        params={"pn": "1", "pz": "200", "po": "1", "np": "1", "fltt": "2", "invt": "2", "fid": main,
+                "fs": fs, "fields": f"f12,f14,{main},{pct},{change}"},
+        headers={"Referer": "https://quote.eastmoney.com/"}, source="东方财富板块资金流",
+    )
+    payload = data.get("data")
+    if not isinstance(payload, dict) or "diff" not in payload:
+        raise ValueError("板块资金流载荷缺少 diff")
+    raw = payload.get("diff") or []
+    if isinstance(raw, dict):
+        raw = list(raw.values())
+    return [{"name": row.get("f14") or "", "code": row.get("f12") or "", "main_net": row.get(main),
+             "main_pct": row.get(pct), "change_pct": row.get(change), "period": period, "type": board_type}
+            for row in raw]
+
+
+def _concept_blocks(client: ResilientHttpClient, code: str) -> list[str]:
+    data = client.get_json(
+        "https://push2.eastmoney.com/api/qt/slist/get",
+        params={"fltt": "2", "invt": "2", "secid": eastmoney_secid(code), "spt": "3", "pi": "0", "pz": "200", "po": "1",
+                "fields": "f12,f14,f3,f128"},
+        headers={"Referer": "https://quote.eastmoney.com/"}, source="东方财富个股板块",
+    )
+    raw = ((data.get("data") or {}).get("diff") or [])
+    if isinstance(raw, dict):
+        raw = list(raw.values())
+    return [str(row.get("f14") or "") for row in raw if row.get("f14")]
 
 
 def _limit_pool(client: ResilientHttpClient, endpoint: str, sort: str, date: str) -> list[dict[str, Any]]:
@@ -181,8 +229,19 @@ def collect_market_context(
     limit_down = safe("跌停池", lambda: _limit_pool(client, "getTopicDTPool", "fund:asc", trade_date))
     ths_hot = safe("同花顺热榜", lambda: _ths_hot(client))
     em_hot = safe("东方财富人气榜", lambda: _em_hot(client))
+    board_funds = safe("板块资金流", lambda: _board_fund_flow(client))
+    concept_blocks: dict[str, list[str]] | None = {}
+    for candidate in candidates:
+        code = str(candidate.get("股票代码") or candidate.get("code") or "")[:6]
+        if not code:
+            continue
+        tags = safe(f"{code}板块归属", lambda code=code: _concept_blocks(client, code))
+        if tags is None:
+            concept_blocks = None
+            break
+        concept_blocks[code] = tags
     sentiment = calculate_market_temperature(industries, limit_up, broken, limit_down)
-    resonance = calculate_theme_resonance(candidates, ths_hot, em_hot, industries)
+    resonance = calculate_theme_resonance(candidates, ths_hot, em_hot, industries, concept_blocks, board_funds)
     for code, item in resonance.items():
         item["market_theme_score"] = _weighted_score(
             [(sentiment.get("market_temperature"), 0.45), (item.get("theme_resonance"), 0.55)]
@@ -191,6 +250,8 @@ def collect_market_context(
         "trade_date": trade_date,
         "sentiment": sentiment,
         "top_industries": (industries or [])[:15],
+        "board_fund_flow": (board_funds or [])[:20],
+        "concept_blocks": concept_blocks or {},
         "theme_resonance": resonance,
         "ths_hot_count": len(ths_hot) if ths_hot is not None else None,
         "em_hot_count": len(em_hot) if em_hot is not None else None,

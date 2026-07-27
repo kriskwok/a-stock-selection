@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from typing import Any
 
 from data_sources import ResilientHttpClient, get_default_client
+from market_utils import eastmoney_secid, market_prefix
 
 
 DATACENTER_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
@@ -119,6 +121,21 @@ def _szse_announcements(
     ]
 
 
+def _sh_announcements(client: ResilientHttpClient, code: str, start: str, end: str) -> list[dict[str, Any]]:
+    """Independent Shanghai announcement fallback when CNINFO is unavailable."""
+    data = client.get_json(
+        "https://np-anotice-stock.eastmoney.com/api/security/ann",
+        params={"sr": "-1", "page_size": 30, "page_index": 1, "ann_type": "A", "client_source": "web",
+                "stock_list": code, "f_node": "0", "s_node": "0"},
+        source="东财沪市公告备源", fallback=True,
+    )
+    return [
+        {"title": row.get("title") or "", "date": str(row.get("notice_date") or "")[:10], "source": "东方财富沪市公告"}
+        for row in (data.get("data") or {}).get("list") or []
+        if start <= str(row.get("notice_date") or "")[:10] <= end
+    ]
+
+
 def fetch_announcements(client: ResilientHttpClient, code: str, trade_date: str) -> list[dict[str, Any]]:
     end = trade_date
     start = (datetime.strptime(trade_date, "%Y-%m-%d") - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -129,25 +146,55 @@ def fetch_announcements(client: ResilientHttpClient, code: str, trade_date: str)
             "公告",
         )
         return rows
-    return _cninfo_announcements(client, code, start, end)
+    rows, _ = client.call_with_fallback(
+        lambda: _cninfo_announcements(client, code, start, end),
+        lambda: _sh_announcements(client, code, start, end),
+        "公告",
+    )
+    return rows
 
 
 def fetch_fund_flow(client: ResilientHttpClient, code: str) -> list[dict[str, Any]]:
-    market = 1 if code.startswith(("6", "9")) else 0
     data = client.get_json(
         "https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get",
         params={
-            "secid": f"{market}.{code}", "fields1": "f1,f2,f3,f7",
+            "secid": eastmoney_secid(code), "fields1": "f1,f2,f3,f7",
             "fields2": "f51,f52,f53,f54,f55,f56,f57", "lmt": "20",
         },
         headers={"Referer": "https://quote.eastmoney.com/"},
     )
+    payload = data.get("data")
+    if not isinstance(payload, dict) or "klines" not in payload:
+        raise ValueError("东财资金流载荷缺少 klines")
     result = []
-    for raw in (data.get("data") or {}).get("klines") or []:
+    for raw in payload.get("klines") or []:
         parts = raw.split(",")
         if len(parts) >= 6:
             result.append({"date": parts[0], "main_net": _float(parts[1]), "super_net": _float(parts[5])})
     return result
+
+
+def _sina_fund_flow(client: ResilientHttpClient, code: str, days: int = 20) -> list[dict[str, Any]]:
+    prefix = market_prefix(code)
+    text = client.get_text(
+        "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/MoneyFlow.ssl_qsfx_zjlrqs",
+        params={"page": "1", "num": str(days), "sort": "opendate", "asc": "0", "daima": f"{prefix}{code}"},
+        headers={"Referer": "https://finance.sina.com.cn/"}, source="新浪资金流备源", fallback=True,
+    )
+    start, end = text.find("["), text.rfind("]")
+    rows = json.loads(text[start:end + 1]) if start >= 0 and end >= start else []
+    return [
+        {"date": row.get("opendate") or "", "main_net": _float(row.get("netamount")), "super_net": None,
+         "source": "新浪日度资金流"}
+        for row in rows
+    ]
+
+
+def fetch_fund_flow_with_fallback(client: ResilientHttpClient, code: str) -> list[dict[str, Any]]:
+    rows, _ = client.call_with_fallback(
+        lambda: fetch_fund_flow(client, code), lambda: _sina_fund_flow(client, code), "个股资金流"
+    )
+    return rows
 
 
 def fetch_margin(client: ResilientHttpClient, code: str) -> list[dict[str, Any]]:
@@ -189,6 +236,41 @@ def fetch_dragon_tiger(client: ResilientHttpClient, code: str, trade_date: str) 
         ],
         "institution_net_wan": round((institution_buy - institution_sell) / 10000, 1),
     }
+
+
+def _exchange_dragon_tiger(client: ResilientHttpClient, code: str, trade_date: str) -> dict[str, Any]:
+    """Official-exchange fallback; institution seats are deliberately left unknown."""
+    if code.startswith(("0", "3")):
+        data = client.get_json(
+            "https://www.szse.cn/api/report/ShowReport/data",
+            params={"SHOWTYPE": "JSON", "CATALOGID": "1842_xxpl", "TABKEY": "tab1", "txtStart": trade_date,
+                    "txtEnd": trade_date, "random": "0.9"},
+            headers={"Referer": "https://www.szse.cn/disclosure/supervision/dealinfo/index.html"},
+            source="深交所龙虎榜备源", fallback=True,
+        )
+        raw = data[0].get("data", []) if isinstance(data, list) and data else []
+        records = [{"date": trade_date, "reason": row.get("plyy") or "", "net_buy_wan": None,
+                    "source": "深交所官方"} for row in raw if str(row.get("zqdm") or "") == code]
+    else:
+        text = client.get_text(
+            "https://query.sse.com.cn/infodisplay/showTradePublicFile.do",
+            params={"jsonCallBack": "cb", "isPagination": "false", "dateTx": trade_date},
+            headers={"Referer": "https://www.sse.com.cn/disclosure/diclosure/public/"},
+            source="上交所龙虎榜备源", fallback=True,
+        )
+        # SSE returns a JSONP publication; preserve its verified availability but
+        # never infer institution flow from unstructured bulletin text.
+        records = [{"date": trade_date, "reason": "上交所龙虎榜公告（待人工复核）", "net_buy_wan": None,
+                    "source": "上交所官方"}] if code in text else []
+    return {"records": records, "institution_net_wan": None, "institution_verified": False}
+
+
+def fetch_dragon_tiger_with_fallback(client: ResilientHttpClient, code: str, trade_date: str) -> dict[str, Any]:
+    result, _ = client.call_with_fallback(
+        lambda: fetch_dragon_tiger(client, code, trade_date),
+        lambda: _exchange_dragon_tiger(client, code, trade_date), "龙虎榜",
+    )
+    return result
 
 
 def calculate_risk_penalty(review: dict[str, Any]) -> dict[str, Any]:
@@ -235,8 +317,9 @@ def calculate_risk_penalty(review: dict[str, Any]) -> dict[str, Any]:
             margin_penalty = 3
             flags.append("融资余额短期快速增加")
 
-    institution_net = _float((review.get("dragon_tiger") or {}).get("institution_net_wan")) if "dragon_tiger" in verified else 0.0
-    institution_penalty = 3 if institution_net < 0 else 0
+    institution_value = (review.get("dragon_tiger") or {}).get("institution_net_wan") if "dragon_tiger" in verified else None
+    institution_net = _float(institution_value) if institution_value is not None else None
+    institution_penalty = 3 if institution_net is not None and institution_net < 0 else 0
     if institution_penalty:
         flags.append("最近龙虎榜机构席位净卖出")
 
@@ -275,10 +358,10 @@ def review_candidate(
 
     review["lockups"] = collect("lockups", lambda: fetch_lockups(client, code, trade_date), [])
     review["announcements"] = collect("announcements", lambda: fetch_announcements(client, code, trade_date), [])
-    review["fund_flow"] = collect("fund_flow", lambda: fetch_fund_flow(client, code), [])
+    review["fund_flow"] = collect("fund_flow", lambda: fetch_fund_flow_with_fallback(client, code), [])
     review["margin"] = collect("margin", lambda: fetch_margin(client, code), [])
     review["dragon_tiger"] = collect(
-        "dragon_tiger", lambda: fetch_dragon_tiger(client, code, trade_date), {"records": [], "institution_net_wan": 0.0}
+        "dragon_tiger", lambda: fetch_dragon_tiger_with_fallback(client, code, trade_date), {"records": [], "institution_net_wan": None}
     )
     review.update(calculate_risk_penalty(review))
     review["coverage"] = round(len(review["verified"]) / 5, 2)

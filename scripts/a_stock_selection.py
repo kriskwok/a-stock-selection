@@ -13,6 +13,7 @@ from pathlib import Path
 
 from data_quality import compose_rankings, source_matrix
 from data_sources import SourceEvent, get_default_client
+from market_utils import eastmoney_secid, is_xshg_trade_day, market_prefix, normalize_code
 from market_context import collect_market_context
 from risk_review import collect_risk_reviews
 from valuation import collect_valuations
@@ -251,13 +252,12 @@ def _eastmoney_global_news(count=50):
 
 def _cls_telegraph(count=50):
     params = {
-        "app": "CailianpressWeb",
-        "category": "",
-        "last_time": str(int(time.time())),
+        "appName": "CailianpressWeb",
+        "last_time": "",
         "os": "web",
         "refresh_type": "1",
         "rn": str(count),
-        "sv": "8.4.6",
+        "sv": "7.7.5",
     }
     query = urllib.parse.urlencode(params)
     signature_input = "&".join(f"{key}={params[key]}" for key in sorted(params))
@@ -331,11 +331,7 @@ def free_search(query, count=12):
 
 
 def _stock_prefix(code):
-    if code.startswith(("6", "9")):
-        return "sh"
-    if code.startswith(("4", "8")):
-        return "bj"
-    return "sz"
+    return market_prefix(code)
 
 
 def _format_table(headers, rows):
@@ -365,12 +361,12 @@ def _parse_float(value):
 
 
 def _tencent_quotes(codes):
-    prefixed = [f"{_stock_prefix(code)}{code}" for code in codes]
+    prefixed = [f"{_stock_prefix(code)}{normalize_code(code)}" for code in codes]
     url = "https://qt.gtimg.cn/q=" + ",".join(prefixed)
     text = get_default_client().get_text(url, encoding="gbk", source="腾讯财经")
     result = {}
     for line in text.splitlines():
-        match = re.search(r'v_(?:sh|sz)(\d{6})="(.*?)";', line)
+        match = re.search(r'v_(?:sh|sz|bj)(\d{6})="(.*?)";', line)
         if not match:
             continue
         code, payload = match.groups()
@@ -385,14 +381,15 @@ def _tencent_quotes(codes):
             "amount_wan": _parse_float(values[37]),
             "volume": _parse_float(values[36]),
             "pe_ttm": _parse_float(values[39]),
-            "mcap_yi": _parse_float(values[44]),
+            "float_mcap_yi": _parse_float(values[44]),
+            "mcap_yi": _parse_float(values[45]),
             "pb": _parse_float(values[46]),
         }
     return result
 
 
 def _eastmoney_history(code, days=260):
-    secid = f"1.{code}" if code.startswith(("6", "9")) else f"0.{code}"
+    secid = eastmoney_secid(code)
     params = urllib.parse.urlencode(
         {
             "secid": secid,
@@ -521,8 +518,9 @@ def _mootdx_history(code, days=260):
     from mootdx.quotes import Quotes
 
     servers = [
-        ("119.97.185.59", 7709), ("124.70.133.119", 7709),
-        ("116.205.183.150", 7709), ("123.60.73.44", 7709),
+        ("119.97.185.59", 7709), ("124.70.133.119", 7709), ("116.205.183.150", 7709),
+        ("123.60.73.44", 7709), ("116.205.163.254", 7709), ("121.36.225.169", 7709),
+        ("123.60.70.228", 7709), ("124.71.9.153", 7709),
     ]
     started = time.monotonic()
     last_error = None
@@ -531,7 +529,12 @@ def _mootdx_history(code, days=260):
             with socket.create_connection(server, timeout=1.5):
                 pass
             client = Quotes.factory(market="std", server=server)
-            frame = client.bars(symbol=code, frequency=9, offset=days)
+            # A TCP handshake is a false-positive on some retired TDX servers.
+            # Validate with a real A-share K-line request before selecting it.
+            probe = client.bars(symbol="000001", frequency=9, offset=1)
+            if probe is None or probe.empty:
+                continue
+            frame = client.bars(symbol=normalize_code(code), frequency=9, offset=days)
             if frame is None or frame.empty:
                 continue
             parsed = []
@@ -553,6 +556,23 @@ def _mootdx_history(code, days=260):
                 )
             )
             return parsed
+        except Exception as exc:
+            last_error = exc
+    # The library's own best-IP path is only a final fallback: clean installs can
+    # have an empty BESTIP configuration, so it must not be the primary route.
+    for kwargs in ({"bestip": True}, {}):
+        try:
+            client = Quotes.factory(market="std", **kwargs)
+            probe = client.bars(symbol="000001", frequency=9, offset=1)
+            frame = client.bars(symbol=normalize_code(code), frequency=9, offset=days)
+            if probe is None or probe.empty or frame is None or frame.empty:
+                continue
+            return [
+                {"date": str(row.get("datetime") or "")[:10], "close": _parse_float(row.get("close")),
+                 "high": _parse_float(row.get("high")), "volume": _parse_float(row.get("vol")),
+                 "amount": _parse_float(row.get("amount")), "pct": None, "unadjusted": True}
+                for _, row in frame.sort_values("datetime").iterrows()
+            ]
         except Exception as exc:
             last_error = exc
     raise RuntimeError(f"mootdx 备源不可用: {last_error}")
@@ -665,7 +685,7 @@ def _theme_aliases(theme):
 
 
 def _sina_growth(code):
-    prefix = "sh" if code.startswith(("6", "9")) else "sz"
+    prefix = market_prefix(code)
     params = urllib.parse.urlencode(
         {
             "paperCode": f"{prefix}{code}",
@@ -901,6 +921,17 @@ def latest_a_share_trade_datetime(now=None):
     elif current.weekday() == 6:
         current -= timedelta(days=2)
     return current
+
+
+def verified_a_share_trade_date(now=None):
+    """Verify today's session against the bundled Shanghai exchange calendar.
+
+    A weekend-only calculation is unsafe around Chinese market holidays.  If the
+    calendar dependency is unavailable, the workflow must not visit other market
+    sources or produce an empty-date report.
+    """
+    current = now or datetime.now()
+    return current if is_xshg_trade_day(current) else None
 
 
 def chinese_date(value):
@@ -2793,6 +2824,17 @@ def market_context_markdown(payloads):
     parts = [_format_table(summary_headers, summary)]
     if industry_rows:
         parts.extend(["### 行业广度与领涨方向", _format_table(industry_headers, industry_rows)])
+    fund_rows = context.get("board_fund_flow") or []
+    if fund_rows:
+        parts.extend([
+            "### 板块主力资金流（行业·当日）",
+            _format_table(
+                ["板块", "主力净流入(元)", "主力净占比(%)", "涨跌幅(%)"],
+                [{"板块": row.get("name"), "主力净流入(元)": row.get("main_net"),
+                  "主力净占比(%)": row.get("main_pct"), "涨跌幅(%)": row.get("change_pct")}
+                 for row in fund_rows[:8]],
+            ),
+        ])
     if context.get("errors"):
         parts.append("数据降级：以下字段未验证，未按零值参与评分。" + "；".join(context["errors"][:5]))
     return "\n\n".join(parts)
@@ -3347,6 +3389,12 @@ def main():
     args = parser.parse_args()
     MAX_CANDIDATES_FOR_TRENDS = max(1, min(50, args.max_candidates))
     enrichment_limit = max(1, min(10, args.enrichment_limit))
+
+    verified_trade_time = verified_a_share_trade_date()
+    if verified_trade_time is None:
+        print("skip: 今天不是已核验的中国 A 股交易日；未访问市场数据、未写入报告。")
+        return
+
     configure_output_dir(args.output_dir)
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -3422,7 +3470,10 @@ def main():
         json.dump({"formal": formal_ranking, "candidates": technical_candidates}, file, ensure_ascii=False, indent=2)
 
     print("running market_context...", flush=True)
-    market_context = collect_market_context(selected_candidates)
+    # Per-stock concept validation is deliberately limited to the enriched list;
+    # it is useful evidence, but must not turn a broad candidate scan into a
+    # high-frequency Eastmoney batch.
+    market_context = collect_market_context(technical_candidates)
     payloads["market_context"] = market_context
     with (DATA_DIR / f"{run_id}-market-context.json").open("w", encoding="utf-8") as file:
         json.dump(market_context, file, ensure_ascii=False, indent=2)
@@ -3443,7 +3494,7 @@ def main():
         json.dump(valuations, file, ensure_ascii=False, indent=2)
 
     print("running risk_review...", flush=True)
-    trade_date = latest_a_share_trade_datetime().strftime("%Y-%m-%d")
+    trade_date = verified_trade_time.strftime("%Y-%m-%d")
     risk_reviews = collect_risk_reviews(technical_candidates, trade_date)
     payloads["risk_reviews"] = risk_reviews
     with (DATA_DIR / f"{run_id}-risk-reviews.json").open("w", encoding="utf-8") as file:

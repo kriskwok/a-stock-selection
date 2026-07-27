@@ -5,7 +5,7 @@ description: 基于公开零 API Key 数据源执行 A 股智能选股与投研�
 
 # A股智能选股工具
 
-版本：1.1.1
+版本：1.1.9
 
 > 项目地址：https://github.com/kriskwok/a-stock-selection
 >
@@ -50,11 +50,13 @@ description: 基于公开零 API Key 数据源执行 A 股智能选股与投研�
 
 ## 数据源规则
 
-- 使用腾讯财经获取实时价格、估值、市值和成交额；
+- 每次运行先使用上交所（XSHG）交易日历核验中国 A 股交易日；非交易日或日历依赖不可用时立即跳过，不访问行情页面、不创建输出目录、不写入空白报告；
+- 使用腾讯财经获取实时价格、估值、市值和成交额；代码路由统一支持沪深北、`92xxxx` 北交所、5x 沪市 ETF、沪市指数白名单及显式 `sh/sz/bj` 前缀；
 - 技术趋势优先使用同花顺独立日线（`d.10jqka.com.cn`）；百度日线返回空记录时视为失败，东方财富前复权日线与 mootdx 不复权日线分别作为后备，其中不复权数据不得跨除权日计算收益；
 - 对东方财富请求执行串行限流、随机抖动、会话复用和退避重试；403 立即熔断，连续 `RemoteDisconnected` 在一次重试后按共享 IP 级故障熔断，后续字段必须走独立备源或标为“未验证”；
 - 使用同花顺与东方财富交叉验证强势股、热榜和题材归因；
-- 使用巨潮、交易所或其他独立来源复核公告及关键风险数据；
+- 使用巨潮、交易所或其他独立来源复核公告及关键风险数据：公告（巨潮→深交所/东财沪市）、资金流（东财→新浪）、龙虎榜（东财→沪深交易所）；备源不含机构席位时明确标为“未验证”；
+- 市场题材除行业广度、热榜交集外，补充板块资金流（行业/概念/地域，今日/5日/10日）与个股板块归属验证；
 - 为每项结果保留来源、数据日期、是否降级、错误原因和字段覆盖率。
 
 ## 脚本路由
@@ -65,6 +67,7 @@ description: 基于公开零 API Key 数据源执行 A 股智能选股与投研�
 - `scripts/risk_review.py`：执行公告、解禁、资金、融资融券和龙虎榜风险复核；
 - `scripts/valuation.py`：计算一致预期、前向 PE、PEG 和成长估值得分；
 - `scripts/data_quality.py`：计算字段覆盖率和数据可信度。
+- `scripts/market_utils.py`：证券代码归一化、市场路由和交易日历解析。
 
 ## 快速运行
 
@@ -92,6 +95,15 @@ python3 /path/to/a-stock-selection/scripts/a_stock_selection.py --output-dir /pa
 
 ```bash
 python3 /path/to/a-stock-selection/scripts/a_stock_selection.py --skip-image --max-candidates 2 --enrichment-limit 2
+```
+
+运行测试：
+
+```bash
+cd /path/to/a-stock-selection/scripts
+python3 -m unittest discover -p 'test_*.py'
+# 低频公共端点冒烟（仅在交易日、可联网时）
+RUN_LIVE_SMOKE=1 python3 -m unittest test_live_sources.py
 ```
 
 
@@ -130,3 +142,4 @@ python3 /path/to/a-stock-selection/scripts/a_stock_selection.py --skip-image --m
 - 除非用户明确要求示例产物，否则不提交 `data/`、`reports/` 或缓存；
 - 隐藏覆盖严重不足的维度，不展示误导性的局部数据；市场、风险和趋势数据失败时显示“未验证”，不得显示为零值；
 - 确保报告结论与实际评分及降级状态一致；
+- 所有东方财富调用必须经 `ResilientHttpClient`；HTTP 200 但关键载荷为空也要记录为未验证或触发独立备源，不能伪装成成功；
