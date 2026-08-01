@@ -36,50 +36,31 @@ FREE_USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 )
 EXPECTED_STOCK_COUNT = 11
-MAX_CANDIDATES_FOR_TRENDS = 25
+MAX_CANDIDATES_FOR_TRENDS = 50
 MIN_MARKET_CAP_YI = 100.0
-PREFERRED_MARKET_CAP_YI = 400.0
 MIN_DAILY_AMOUNT_WAN = 50000.0
 MIN_VOLUME_RATIO_5D = 1.15
 TREND_COMPLETENESS_MIN_RATIO = 0.6
+HOT_STOCK_LIMIT = 10
+BOARD_MOVER_LIMIT = 5
+BOARD_MEMBER_LIMIT = 3
 BLOCKED_NEWS_DOMAINS = (
     "guba.eastmoney.com",
     "xyhndec.cn",
 )
-DEFAULT_HOT_THEMES = (
-    "AI算力",
-    "人工智能",
-    "半导体",
-    "机器人",
-    "低空经济",
-    "创新药",
-    "储能",
-    "CPO",
-)
-THEME_KEYWORDS = (
-    "人工智能",
-    "AI",
-    "算力",
-    "光模块",
-    "CPO",
-    "服务器",
-    "液冷",
-    "半导体",
-    "芯片",
-    "存储",
-    "先进封装",
-    "光刻",
-    "机器人",
-    "自动化",
-    "低空",
-    "飞行汽车",
-    "无人机",
-    "创新药",
-    "医药",
-    "CXO",
-    "储能",
-    "电力",
-    "高端制造",
+HOT_TOPIC_MARKERS = (
+    "A股",
+    "上市公司",
+    "板块",
+    "概念",
+    "产业链",
+    "赛道",
+    "涨停",
+    "跌停",
+    "主力资金",
+    "政策",
+    "订单",
+    "业绩",
 )
 POSITIVE_HOTSPOT_TERMS = (
     "政策",
@@ -110,85 +91,6 @@ NEGATIVE_HOTSPOT_TERMS = (
     "套现",
     "欺诈",
 )
-THEME_STOCK_UNIVERSE = {
-    "AI算力": [
-        ("300308.SZ", "中际旭创"),
-        ("300502.SZ", "新易盛"),
-        ("300394.SZ", "天孚通信"),
-        ("601138.SH", "工业富联"),
-        ("000977.SZ", "浪潮信息"),
-        ("000938.SZ", "紫光股份"),
-        ("002463.SZ", "沪电股份"),
-        ("002281.SZ", "光迅科技"),
-    ],
-    "CPO": [
-        ("300308.SZ", "中际旭创"),
-        ("300502.SZ", "新易盛"),
-        ("300394.SZ", "天孚通信"),
-        ("002281.SZ", "光迅科技"),
-        ("300570.SZ", "太辰光"),
-        ("688205.SH", "德科立"),
-    ],
-    "半导体": [
-        ("688256.SH", "寒武纪"),
-        ("002371.SZ", "北方华创"),
-        ("688012.SH", "中微公司"),
-        ("688041.SH", "海光信息"),
-        ("688981.SH", "中芯国际"),
-        ("688072.SH", "拓荆科技"),
-        ("600584.SH", "长电科技"),
-        ("603986.SH", "兆易创新"),
-    ],
-    "人工智能": [
-        ("688256.SH", "寒武纪"),
-        ("002230.SZ", "科大讯飞"),
-        ("688111.SH", "金山办公"),
-        ("300033.SZ", "同花顺"),
-        ("603019.SH", "中科曙光"),
-        ("000977.SZ", "浪潮信息"),
-    ],
-    "机器人": [
-        ("300024.SZ", "机器人"),
-        ("300124.SZ", "汇川技术"),
-        ("002747.SZ", "埃斯顿"),
-        ("688017.SH", "绿的谐波"),
-        ("603728.SH", "鸣志电器"),
-        ("601689.SH", "拓普集团"),
-    ],
-    "低空经济": [
-        ("002085.SZ", "万丰奥威"),
-        ("000099.SZ", "中信海直"),
-        ("001696.SZ", "宗申动力"),
-        ("002389.SZ", "航天彩虹"),
-        ("688070.SH", "纵横股份"),
-        ("002625.SZ", "光启技术"),
-    ],
-    "创新药": [
-        ("603259.SH", "药明康德"),
-        ("600276.SH", "恒瑞医药"),
-        ("002821.SZ", "凯莱英"),
-        ("300347.SZ", "泰格医药"),
-        ("002422.SZ", "科伦药业"),
-        ("300760.SZ", "迈瑞医疗"),
-    ],
-    "储能": [
-        ("300750.SZ", "宁德时代"),
-        ("300274.SZ", "阳光电源"),
-        ("300014.SZ", "亿纬锂能"),
-        ("688390.SH", "固德威"),
-        ("300827.SZ", "上能电气"),
-        ("300068.SZ", "南都电源"),
-    ],
-    "存储芯片": [
-        ("603986.SH", "兆易创新"),
-        ("688008.SH", "澜起科技"),
-        ("688525.SH", "佰维存储"),
-        ("688123.SH", "聚辰股份"),
-        ("001309.SZ", "德明利"),
-    ],
-}
-
-
 def load_keys():
     """Compatibility shim: the free-source workflow does not require API keys."""
     return None, None
@@ -277,9 +179,10 @@ def _cls_telegraph(count=50):
     ]
 
 
-def _latest_ths_hot_rows(max_days=7):
+def _latest_ths_hot_rows(max_days=1, as_of=None):
+    base_date = as_of or datetime.now()
     for offset in range(max_days):
-        date = (datetime.now() - timedelta(days=offset)).strftime("%Y-%m-%d")
+        date = (base_date - timedelta(days=offset)).strftime("%Y-%m-%d")
         url = (
             "http://zx.10jqka.com.cn/event/api/getharden/"
             f"date/{date}/orderby/date/orderway/desc/charset/GBK/"
@@ -292,6 +195,38 @@ def _latest_ths_hot_rows(max_days=7):
         except Exception as exc:
             print(f"warning: 同花顺热点请求失败({date}): {exc}", file=sys.stderr)
     return datetime.now().strftime("%Y-%m-%d"), []
+
+
+def _ths_limit_up_reason_rows(trade_date=None, limit=200):
+    """同花顺涨停揭秘备源：只取当日涨停原因，不依赖资讯新闻。"""
+    trade_date = trade_date or datetime.now().strftime("%Y%m%d")
+    params = {
+        "page": 1,
+        "limit": limit,
+        "field": "199112,10,9001,330323,330324,330325,9002,330329,133971,133970,1968584,3475914,9003,9004",
+        "filter": "HS,GEM2STAR",
+        "order_field": "330324",
+        "order_type": "0",
+        "date": trade_date,
+    }
+    data = get_default_client().get_json(
+        "https://data.10jqka.com.cn/dataapi/limit_up/limit_up_pool",
+        params=params,
+        headers={"Referer": "https://data.10jqka.com.cn/limit_up/"},
+        source="同花顺涨停揭秘",
+    )
+    info = ((data.get("data") or {}).get("info") or [])
+    return [
+        {
+            "code": normalize_stock_code(row.get("code") or ""),
+            "name": clean_stock_name(row.get("name") or ""),
+            "reason": compact_text(row.get("reason_type") or ""),
+            "题材归因": compact_text(row.get("reason_type") or ""),
+            "source": "同花顺涨停揭秘",
+        }
+        for row in info
+        if row.get("reason_type")
+    ]
 
 
 def free_search(query, count=12):
@@ -311,12 +246,9 @@ def free_search(query, count=12):
             print(f"warning: 东财快讯备源不可用: {exc}", file=sys.stderr)
     try:
         hot_date, hot_rows = _latest_ths_hot_rows()
-        keywords = [word for word in THEME_KEYWORDS if word.lower() in query.lower()]
         for row in hot_rows[: max(20, count * 2)]:
             reason = row.get("reason") or row.get("题材归因") or ""
             name = row.get("name") or row.get("名称") or ""
-            if keywords and not any(word.lower() in f"{reason} {name}".lower() for word in keywords):
-                continue
             items.append(
                 _free_news_item(
                     f"{name}：{reason}" if reason else name,
@@ -623,6 +555,8 @@ def _trend_metrics(code, quote):
         if len(closes) <= period:
             return None
         return (closes[-1] / closes[-period - 1] - 1) * 100
+    ma5 = sum(closes[-5:]) / 5 if adjusted and len(closes) >= 5 else None
+    ma10 = sum(closes[-10:]) / 10 if adjusted and len(closes) >= 10 else None
     ma20 = sum(closes[-20:]) / 20 if adjusted and len(closes) >= 20 else None
     ma60 = sum(closes[-60:]) / 60 if adjusted and len(closes) >= 60 else None
     high_52w = max(highs[-250:]) if adjusted and highs else None
@@ -643,8 +577,11 @@ def _trend_metrics(code, quote):
         "history": history,
         "close": current,
         "return_5": period_return(5),
+        "return_10": period_return(10),
         "return_20": period_return(20),
         "return_60": period_return(60),
+        "ma5": ma5,
+        "ma10": ma10,
         "ma20": ma20,
         "ma60": ma60,
         "high_52w": high_52w,
@@ -656,8 +593,9 @@ def _trend_metrics(code, quote):
     }
 
 
-def _eastmoney_board_catalog():
-    params = urllib.parse.urlencode({"pn": "1", "pz": "1000", "po": "1", "np": "1", "fltt": "2", "invt": "2", "fid": "f3", "fs": "m:90+t:3", "fields": "f12,f14,f3"})
+def _eastmoney_board_catalog(board_type="concept"):
+    board_fs = {"industry": "m:90+t:2", "concept": "m:90+t:3"}[board_type]
+    params = urllib.parse.urlencode({"pn": "1", "pz": "1000", "po": "1", "np": "1", "fltt": "2", "invt": "2", "fid": "f3", "fs": board_fs, "fields": "f12,f14,f3"})
     url = "https://push2.eastmoney.com/api/qt/clist/get?" + params
     _, data = free_http_json(url, {"Referer": "https://quote.eastmoney.com/"})
     return (data.get("data") or {}).get("diff") or []
@@ -670,18 +608,216 @@ def _eastmoney_board_members(board_code):
     return (data.get("data") or {}).get("diff") or []
 
 
-def _theme_aliases(theme):
-    aliases = {
-        "AI算力": ("算力", "AI", "人工智能", "数据中心"),
-        "人工智能": ("人工智能", "AI", "算力"),
-        "半导体": ("半导体", "芯片", "集成电路"),
-        "机器人": ("机器人", "人形机器人", "工业机器人"),
-        "低空经济": ("低空经济", "飞行汽车", "无人机"),
-        "创新药": ("创新药", "医药", "生物医药"),
-        "储能": ("储能", "电力设备", "新型电力系统"),
-        "CPO": ("CPO", "光模块", "光通信"),
-    }
-    return aliases.get(theme, (theme,))
+def _board_catalog_rows():
+    rows = []
+    for board_type in ("industry", "concept"):
+        for raw in _eastmoney_board_catalog(board_type):
+            change = _parse_float(raw.get("f3"))
+            if raw.get("f12") and raw.get("f14") and change is not None:
+                rows.append({"code": raw["f12"], "name": raw["f14"], "change_pct": change, "type": board_type})
+    return rows
+
+
+def _board_movers(limit=BOARD_MOVER_LIMIT, board_catalog=None):
+    """Return today's strongest and weakest boards for candidate recall only."""
+    rows = list(board_catalog) if board_catalog is not None else _board_catalog_rows()
+    rows.sort(key=lambda row: row["change_pct"], reverse=True)
+    selected = [dict(row, mover_side="涨幅前五") for row in rows[:limit]]
+    selected += [dict(row, mover_side="跌幅前五") for row in rows[-limit:]]
+    return list({row["code"]: row for row in selected}.values())
+
+
+def _ths_hot_stocks(limit=HOT_STOCK_LIMIT):
+    data = get_default_client().get_json(
+        "https://dq.10jqka.com.cn/fuyao/hot_list_data/out/hot_list/v1/stock",
+        params={"stock_type": "a", "type": "hour", "list_type": "normal"},
+        headers={"Referer": "https://q.10jqka.com.cn/"},
+        source="同花顺热股",
+    )
+    raw_rows = (data.get("data") or {}).get("stock_list") or []
+    rows = []
+    for row in raw_rows[:limit]:
+        raw_tags = ((row.get("tag") or {}).get("concept_tag") or [])[:3]
+        tags = [compact_text(tag.get("name") if isinstance(tag, dict) else tag) for tag in raw_tags]
+        rows.append({
+            "股票代码": normalize_stock_code(row.get("code") or ""),
+            "股票名称": clean_stock_name(row.get("name") or ""),
+            "所属主题": "、".join(tag for tag in tags if tag),
+            "热点触发": "同花顺热股前10",
+            "候选来源": "同花顺热股",
+        })
+    return rows
+
+
+def _xueqiu_hot_stocks(limit=HOT_STOCK_LIMIT):
+    client = get_default_client()
+    headers = {"Referer": "https://xueqiu.com/", "User-Agent": FREE_USER_AGENT}
+    if os.environ.get("XUEQIU_COOKIE"):
+        headers["Cookie"] = os.environ["XUEQIU_COOKIE"]
+    client.request("GET", "https://xueqiu.com/", headers=headers, source="雪球热股入口")
+    data = client.get_json(
+        "https://stock.xueqiu.com/v5/stock/hot_stock/list.json",
+        params={"_type": "10", "type": "12", "size": str(limit)},
+        headers=headers,
+        source="雪球热股",
+    )
+    raw_rows = (data.get("data") or {}).get("items") or []
+    return [
+        {
+            "股票代码": normalize_stock_code(row.get("symbol") or row.get("code") or ""),
+            "股票名称": clean_stock_name(row.get("name") or ""),
+            "所属主题": "",
+            "热点触发": "雪球热股前10",
+            "候选来源": "雪球热股",
+        }
+        for row in raw_rows[:limit]
+    ]
+
+
+def _reason_themes(rows, limit=12):
+    counts = {}
+    for row in rows:
+        reason = compact_text(row.get("reason") or row.get("题材归因") or "")
+        for term in re.split(r"[+、，,;/|：:\s]+", reason):
+            term = re.sub(r"(?:概念|板块)$", "", term).strip()
+            if 2 <= len(term) <= 12 and not re.fullmatch(r"\d+(?:\.\d+)?%?", term):
+                counts[term] = counts.get(term, 0) + 1
+    return [name for name, _ in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]]
+
+
+def _theme_tags(text):
+    """Normalize a source's concept labels into theme names."""
+    tags = []
+    for token in re.split(r"[+、，,;/|：:\s]+", compact_text(text or "")):
+        token = re.sub(r"(?:概念|板块|产业链|赛道)$", "", token).strip()
+        if 2 <= len(token) <= 16 and not re.fullmatch(r"\d+(?:\.\d+)?%?", token):
+            tags.append(token)
+    return list(dict.fromkeys(tags))
+
+
+def dynamic_theme_names(
+    ths_reason_rows=None,
+    ths_hot_rows=None,
+    xueqiu_hot_rows=None,
+    board_catalog=None,
+    board_movers=None,
+    limit=12,
+):
+    """Build today's themes from market-data sources only; never from news text."""
+    evidence = {}
+
+    def add(name, source, weight=1, change=None):
+        name = compact_text(name)
+        if not name:
+            return
+        item = evidence.setdefault(name, {"sources": set(), "evidence": 0, "changes": []})
+        item["sources"].add(source)
+        item["evidence"] += weight
+        if change is not None:
+            item["changes"].append(change)
+
+    for row in ths_reason_rows or []:
+        for tag in _theme_tags(row.get("reason") or row.get("题材归因")):
+            add(tag, row.get("source") or "同花顺热点归因")
+    for row in ths_hot_rows or []:
+        for tag in _theme_tags(row.get("所属主题") or row.get("concepts")):
+            add(tag, "同花顺热股标签")
+    for row in xueqiu_hot_rows or []:
+        for tag in _theme_tags(row.get("所属主题") or row.get("concepts")):
+            add(tag, "雪球热股标签")
+    for row in board_movers or []:
+        add(row.get("name"), "东方财富板块涨跌前五", weight=2, change=_parse_float(row.get("change_pct")))
+
+    # Catalog is an Eastmoney naming dictionary. It is used only to retain
+    # source labels when a reason/tag happens to match a board.
+    catalog_names = {compact_text(row.get("name")): row for row in (board_catalog or []) if row.get("name")}
+    for name, item in list(evidence.items()):
+        for board_name, board in catalog_names.items():
+            if name in board_name or board_name in name:
+                item["sources"].add("东方财富板块目录")
+                if board.get("change_pct") is not None:
+                    item["changes"].append(_parse_float(board.get("change_pct")))
+                break
+
+    ranked = sorted(
+        evidence.items(),
+        key=lambda pair: (-len(pair[1]["sources"]), -pair[1]["evidence"], -max(pair[1]["changes"] or [float("-inf")]), pair[0]),
+    )
+    return [name for name, _ in ranked[:limit]]
+
+
+def market_theme_rows(
+    ths_reason_rows=None,
+    ths_hot_rows=None,
+    xueqiu_hot_rows=None,
+    board_catalog=None,
+    board_movers=None,
+    limit=12,
+):
+    """Render source evidence for themes; this table is not a score input."""
+    evidence = {}
+
+    def add(name, source, weight=1, change=None, side=""):
+        name = compact_text(name)
+        if not name:
+            return
+        item = evidence.setdefault(name, {"sources": set(), "evidence": 0, "changes": [], "sides": set()})
+        item["sources"].add(source)
+        item["evidence"] += weight
+        if change is not None:
+            item["changes"].append(change)
+        if side:
+            item["sides"].add(side)
+
+    for row in ths_reason_rows or []:
+        for tag in _theme_tags(row.get("reason") or row.get("题材归因")):
+            add(tag, row.get("source") or "同花顺热点归因")
+    for row in ths_hot_rows or []:
+        for tag in _theme_tags(row.get("所属主题") or row.get("concepts")):
+            add(tag, "同花顺热股标签")
+    for row in xueqiu_hot_rows or []:
+        for tag in _theme_tags(row.get("所属主题") or row.get("concepts")):
+            add(tag, "雪球热股标签")
+    for row in board_movers or []:
+        add(row.get("name"), "东方财富板块涨跌前五", weight=2, change=_parse_float(row.get("change_pct")), side=row.get("mover_side") or "")
+
+    catalog_names = {compact_text(row.get("name")): row for row in (board_catalog or []) if row.get("name")}
+    for name, item in list(evidence.items()):
+        for board_name, board in catalog_names.items():
+            if name in board_name or board_name in name:
+                item["sources"].add("东方财富板块目录")
+                if board.get("change_pct") is not None:
+                    item["changes"].append(_parse_float(board.get("change_pct")))
+                break
+
+    rows = []
+    for theme in dynamic_theme_names(ths_reason_rows, ths_hot_rows, xueqiu_hot_rows, board_catalog, board_movers, limit=limit):
+        item = evidence[theme]
+        source_count = len(item["sources"])
+        changes = item["changes"]
+        if source_count >= 2:
+            quality, action = "多源市场热点", "进入候选池，仍需综合评分"
+        elif source_count == 1:
+            quality, action = "单源市场热点", "进入候选池，提示一日游风险"
+        else:
+            quality, action = "待确认", "不作为独立依据"
+        side_text = "、".join(sorted(item["sides"]))
+        support = "、".join(sorted(item["sources"]))
+        if side_text:
+            support += f"；{side_text}"
+        rows.append({
+            "主题": theme,
+            "热度次数": item["evidence"],
+            "近24小时": "市场当日",
+            "来源数": source_count,
+            "验证状态": "多源市场数据" if source_count >= 2 else "单源市场数据",
+            "热点质量分": round(50 + min(35, source_count * 12 + item["evidence"] * 2), 1),
+            "质量判断": quality,
+            "支撑因素": support,
+            "风险信号": "跌幅前五/一日游风险" if "跌幅前五" in side_text else "暂无额外市场源风险",
+            "选股处理": action,
+        })
+    return rows
 
 
 def _sina_growth(code):
@@ -727,79 +863,87 @@ def _sina_growth(code):
     return {}
 
 
-def free_candidates(themes):
-    _, hot_rows = _latest_ths_hot_rows()
-    hot_by_code = {}
-    for raw in hot_rows:
-        code = normalize_stock_code(raw.get("code") or raw.get("代码") or "")
-        if code:
-            hot_by_code[code] = compact_text(raw.get("reason") or raw.get("题材归因") or "")
-    rows = []
-    member_rows = []
-    for raw in hot_rows:
-        code = normalize_stock_code(raw.get("code") or raw.get("代码") or "")
-        name = clean_stock_name(raw.get("name") or raw.get("名称") or "")
-        reason = compact_text(raw.get("reason") or raw.get("题材归因") or "")
-        member_rows.append({"股票代码": code, "股票名称": name, "所属主题": next((theme for theme in themes if theme in f"{name} {reason}"), ""), "热点触发": reason})
-
-    # Build a sufficient independent universe before attempting Eastmoney board
-    # expansion. This keeps a push2 IP circuit from suppressing formal rankings.
-    known = {row.get("股票代码") for row in member_rows}
-    for row in curated_candidate_rows(themes, limit=MAX_CANDIDATES_FOR_TRENDS):
-        if row["股票代码"] not in known:
-            member_rows.append(row)
-            known.add(row["股票代码"])
-
-    expanded = {}
-    if len(member_rows) < 10:
+def free_candidates(
+    themes=None,
+    ths_reason_rows=None,
+    board_movers=None,
+    board_catalog=None,
+    ths_hot_rows=None,
+    xueqiu_hot_rows=None,
+):
+    """Build an unscored, current-day candidate pool from hot lists and boards."""
+    if ths_reason_rows is None:
+        _, ths_reason_rows = _latest_ths_hot_rows()
+    themes = list(dict.fromkeys((themes or []) + _reason_themes(ths_reason_rows)))
+    discovered = []
+    hot_sources = (("同花顺热股", _ths_hot_stocks, ths_hot_rows), ("雪球热股", _xueqiu_hot_stocks, xueqiu_hot_rows))
+    for label, fetcher, cached_rows in hot_sources:
         try:
-            boards = _eastmoney_board_catalog()
-            for theme in themes:
-                matches = [board for board in boards if any(alias in compact_text(board.get("f14")) for alias in _theme_aliases(theme))]
-                for board in matches[:3]:
-                    for member in _eastmoney_board_members(board.get("f12", "")):
-                        code = normalize_stock_code(member.get("f12", ""))
-                        if code:
-                            expanded.setdefault(code, {"name": member.get("f14", ""), "theme": theme, "board": board.get("f14", "")})
+            discovered.extend(cached_rows if cached_rows is not None else fetcher(HOT_STOCK_LIMIT))
         except Exception as exc:
-            print(f"warning: 板块成分股扩展失败，继续使用独立候选池: {exc}", file=sys.stderr)
-    for code, meta in expanded.items():
-        if code not in known:
-            member_rows.append({"股票代码": code, "股票名称": meta.get("name", ""), "所属主题": meta.get("theme", ""), "热点触发": hot_by_code.get(code, f"{meta.get('board', '')}板块成分股")})
-    codes = [row["股票代码"].split(".")[0] for row in member_rows if row.get("股票代码")]
+            print(f"warning: {label}不可用，本轮透明降级: {exc}", file=sys.stderr)
+
     try:
-        quotes = _tencent_quotes(codes)
+        movers = board_movers if board_movers is not None else _board_movers()
+        matched_boards = []
+        catalog = list(board_catalog) if board_catalog is not None else _board_catalog_rows()
+        for board in catalog:
+            name = compact_text(board.get("name"))
+            if name and any(theme and (theme in name or name in theme) for theme in themes):
+                matched_boards.append({"code": board.get("code"), "name": name, "type": "当日热门题材"})
+        for board in movers:
+            direction = board.get("mover_side") or "板块涨跌前后五"
+            matched_boards.append({"code": board["code"], "name": board["name"], "type": direction})
+        seen_boards = set()
+        for board in matched_boards:
+            if not board.get("code") or board["code"] in seen_boards:
+                continue
+            seen_boards.add(board["code"])
+            for member in _eastmoney_board_members(board["code"])[:BOARD_MEMBER_LIMIT]:
+                discovered.append(
+                    {
+                        "股票代码": normalize_stock_code(member.get("f12") or ""),
+                        "股票名称": clean_stock_name(member.get("f14") or ""),
+                        "所属主题": board["name"],
+                        "热点触发": f"{board['name']}（{board['type']}）成分股",
+                        "候选来源": f"板块扩展-{board['type']}",
+                    }
+                )
     except Exception as exc:
-        print(f"warning: 腾讯行情源不可用，无法执行市值/成交额门槛: {exc}", file=sys.stderr)
-        quotes = {}
-    for candidate in member_rows:
-        code = candidate.get("股票代码", "")
-        name = clean_stock_name(candidate.get("股票名称", ""))
-        quote = quotes.get(code.split(".")[0], {})
-        cap = quote.get("mcap_yi")
-        amount = quote.get("amount_wan")
-        if not code or not name or code.endswith(".BJ") or "ST" in name.upper() or "退" in name:
+        print(f"warning: 当日板块候选扩展失败，本轮保留热股榜候选: {exc}", file=sys.stderr)
+
+    rows_by_code = {}
+    order = []
+    for raw in discovered:
+        code = normalize_stock_code(raw.get("股票代码") or "")
+        name = clean_stock_name(raw.get("股票名称") or "")
+        if not code or not name:
             continue
-        if cap is None or cap < MIN_MARKET_CAP_YI or amount is None or amount < MIN_DAILY_AMOUNT_WAN:
-            continue
-        matched = candidate.get("所属主题") or "热点关联"
-        rows.append({
-            "股票代码": code,
-            "股票名称": name,
-            "所属主题": matched,
-            "热点触发": candidate.get("热点触发") or "热点板块成分股",
-            "主营关联度": f"{name}与{matched}相关",
-            "主要风险": "需结合量价、估值、业绩兑现和技术位置二次确认",
-            "市值(亿元)": cap,
-            "成交额(万元)": amount,
-            "_score": (8 if cap >= PREFERRED_MARKET_CAP_YI else 2) + min(8, int(amount / 50000)),
-        })
+        if code not in rows_by_code:
+            rows_by_code[code] = {
+                "股票代码": code,
+                "股票名称": name,
+                "所属主题": compact_text(raw.get("所属主题") or "当日热门"),
+                "热点触发": compact_text(raw.get("热点触发") or "当日热门候选"),
+                "候选来源": compact_text(raw.get("候选来源") or "当日热门"),
+                "主营关联度": "待后续板块归属验证",
+                "主要风险": "需通过技术、估值成长、舆情和资金等后续评分",
+            }
+            order.append(code)
+        else:
+            current = rows_by_code[code]
+            current["候选来源"] = "、".join(dict.fromkeys((current["候选来源"] + "、" + compact_text(raw.get("候选来源") or "")).split("、")))
+            if not current.get("所属主题") and raw.get("所属主题"):
+                current["所属主题"] = compact_text(raw["所属主题"])
+    rows = [rows_by_code[code] for code in order][:MAX_CANDIDATES_FOR_TRENDS]
     if not rows:
-        return {"success": True, "result": []}
-    rows.sort(key=lambda row: row["_score"], reverse=True)
-    headers = ["股票代码", "股票名称", "所属主题", "热点触发", "主营关联度", "主要风险", "市值(亿元)", "成交额(万元)"]
-    query = "免费热点榜候选股"
-    return {"success": True, "result": [{"query": query, "content": _format_table(headers, rows[:MAX_CANDIDATES_FOR_TRENDS]), "status": "success", "source": "同花顺热点/内置主题池+腾讯行情"}]}
+        return {"success": True, "result": [], "candidates": []}
+    headers = ["股票代码", "股票名称", "所属主题", "候选来源", "热点触发", "主营关联度", "主要风险"]
+    return {
+        "success": True,
+        "candidates": rows,
+        "result": [{"query": "当日动态热点候选股", "content": _format_table(headers, rows), "status": "success", "source": "同花顺热股/雪球热股/当日板块涨跌幅"}],
+    }
 
 
 def enforce_candidate_constraints(rows):
@@ -823,9 +967,7 @@ def enforce_candidate_constraints(rows):
         updated = dict(row)
         updated["市值(亿元)"] = cap
         updated["成交额(万元)"] = amount
-        updated["市值偏好"] = "400亿以上" if cap >= PREFERRED_MARKET_CAP_YI else "100亿以上"
         selected.append(updated)
-    selected.sort(key=lambda row: (row.get("市值(亿元)", 0) >= PREFERRED_MARKET_CAP_YI, row.get("市值(亿元)", 0), row.get("成交额(万元)", 0)), reverse=True)
     return selected[:MAX_CANDIDATES_FOR_TRENDS]
 
 
@@ -852,13 +994,13 @@ def free_trends(candidate_rows):
     history_source_label = "/".join(history_sources) or "历史K线源不可用"
 
     sections = []
-    for label, key, title in (("5", "return_5", "最近5日涨跌幅"), ("20", "return_20", "最近20日涨跌幅"), ("60", "return_60", "最近60日涨跌幅")):
+    for label, key, title in (("5", "return_5", "最近5日涨跌幅"), ("10", "return_10", "最近10日涨跌幅"), ("20", "return_20", "最近20日涨跌幅"), ("60", "return_60", "最近60日涨跌幅")):
         rows = [{"股票代码": code, "股票名称": data["name"], f"{label}日涨跌幅(%)": data.get(key, "")} for code, data in metrics.items()]
         sections.append({"query": f"截至最新交易日{title}", "content": _format_table(["股票代码", "股票名称", f"{label}日涨跌幅(%)"], rows), "status": "success", "source": history_source_label})
     ma_rows = []
     for code, data in metrics.items():
-        ma_rows.append({"股票代码": code, "股票名称": data["name"], "收盘价(元)": data.get("close", ""), "20日均线(元)": data.get("ma20", ""), "60日均线(元)": data.get("ma60", "")})
-    sections.append({"query": "截至最新交易日20日均线和60日均线价格以及当日收盘价", "content": _format_table(["股票代码", "股票名称", "收盘价(元)", "20日均线(元)", "60日均线(元)"], ma_rows), "status": "success", "source": history_source_label})
+        ma_rows.append({"股票代码": code, "股票名称": data["name"], "收盘价(元)": data.get("close", ""), "5日均线(元)": data.get("ma5", ""), "10日均线(元)": data.get("ma10", ""), "20日均线(元)": data.get("ma20", ""), "60日均线(元)": data.get("ma60", "")})
+    sections.append({"query": "截至最新交易日5日10日20日和60日均线价格以及当日收盘价", "content": _format_table(["股票代码", "股票名称", "收盘价(元)", "5日均线(元)", "10日均线(元)", "20日均线(元)", "60日均线(元)"], ma_rows), "status": "success", "source": history_source_label})
     high_rows = []
     valuation_rows = []
     growth_rows = []
@@ -874,7 +1016,7 @@ def free_trends(candidate_rows):
         growth = data["growth"]
         growth_rows.append({"股票代码": code, "股票名称": data["name"], "营业收入同比增速(%)": growth.get("revenue_yoy", ""), "净利润同比增速(%)": growth.get("profit_yoy", "")})
     sections.append({"query": "截至最新交易日当前股价与过去52周最高价", "content": _format_table(["股票代码", "股票名称", "收盘价_元", "过去52周最高价_元", "距离52周高点位置_百分比"], high_rows), "status": "success", "source": history_source_label})
-    sections.append({"query": "免费行情估值指标市盈率市净率", "content": _format_table(["股票代码", "股票名称", "市盈率(TTM)", "市净率", "总市值(亿元)", "换手率(%)"], valuation_rows), "status": "success", "source": "腾讯财经"})
+    sections.append({"query": "免费行情估值指标市盈率市净率成交额量能", "content": _format_table(["股票代码", "股票名称", "市盈率(TTM)", "市净率", "总市值(亿元)", "成交额(万元)", "换手率(%)", "5日量能比"], valuation_rows), "status": "success", "source": "腾讯财经"})
     sections.append({"query": "营业收入同比和净利润同比成长与业绩", "content": _format_table(["股票代码", "股票名称", "营业收入同比增速(%)", "净利润同比增速(%)"], growth_rows), "status": "success", "source": "公开财报接口"})
     return {"success": True, "result": sections}
 
@@ -916,22 +1058,37 @@ def parse_item_datetime(value):
 
 def latest_a_share_trade_datetime(now=None):
     current = now or datetime.now()
+    for offset in range(15):
+        candidate = current - timedelta(days=offset)
+        try:
+            if is_xshg_trade_day(candidate):
+                return candidate
+        except RuntimeError:
+            break
+    # Keep a conservative weekend fallback if the optional calendar cannot be
+    # imported; the main workflow still performs strict verification first.
     if current.weekday() == 5:
-        current -= timedelta(days=1)
-    elif current.weekday() == 6:
-        current -= timedelta(days=2)
+        return current - timedelta(days=1)
+    if current.weekday() == 6:
+        return current - timedelta(days=2)
     return current
 
 
-def verified_a_share_trade_date(now=None):
-    """Verify today's session against the bundled Shanghai exchange calendar.
+def verified_a_share_trade_date(now=None, allow_previous=False):
+    """Verify today's session, or optionally return the latest prior session.
 
     A weekend-only calculation is unsafe around Chinese market holidays.  If the
-    calendar dependency is unavailable, the workflow must not visit other market
+    calendar dependency is unavailable, strict callers must not visit other market
     sources or produce an empty-date report.
     """
     current = now or datetime.now()
-    return current if is_xshg_trade_day(current) else None
+    if is_xshg_trade_day(current):
+        return current
+    if allow_previous:
+        previous = latest_a_share_trade_datetime(current)
+        if previous.date() != current.date() and is_xshg_trade_day(previous):
+            return previous
+    return None
 
 
 def chinese_date(value):
@@ -963,7 +1120,7 @@ def filter_fresh_news(items, today=None, lookback_days=NEWS_LOOKBACK_DAYS):
         market_context = ("A股", "沪", "深", "创业板", "科创", "涨停", "指数", "板块", "公司", "产业", "上市", "ETF")
         if any(term in text for term in irrelevant):
             continue
-        if not (any(term in text for term in market_context) or any(term in text for term in THEME_KEYWORDS)):
+        if not (any(term in text for term in market_context) or any(term in text for term in HOT_TOPIC_MARKERS)):
             continue
         normalized_title = re.sub(r"\W+", "", title.lower())
         if normalized_title in seen_titles:
@@ -1072,6 +1229,9 @@ def clean_missing_cell(value):
 
 def normalize_stock_code(value):
     text = compact_text(value).upper()
+    match = re.search(r"\b(SH|SZ|BJ)(\d{6})\b", text)
+    if match:
+        return f"{match.group(2)}.{match.group(1)}"
     match = re.search(r"(\d{6})\.(SH|SZ|BJ)", text)
     if match:
         return f"{match.group(1)}.{match.group(2)}"
@@ -1364,6 +1524,9 @@ TREND_MOMENTUM_DIRECT_COLUMNS = (
     "最近5日涨跌幅(%)",
     "5日涨跌幅(%)",
     "近5日涨跌幅(%)",
+    "最近10日涨跌幅(%)",
+    "10日涨跌幅(%)",
+    "近10日涨跌幅(%)",
     "最近20日涨跌幅(%)",
     "20日涨跌幅(%)",
     "近20日涨跌幅(%)",
@@ -1448,6 +1611,14 @@ def direct_ma20_value(row):
     )
 
 
+def direct_ma5_value(row):
+    return direct_number(row, ("5日均线价格(元)", "5日均线(元)", "5日均线_元"), ("5日均线",))
+
+
+def direct_ma10_value(row):
+    return direct_number(row, ("10日均线价格(元)", "10日均线(元)", "10日均线_元"), ("10日均线",))
+
+
 def direct_ma60_value(row):
     return direct_number(
         row,
@@ -1485,20 +1656,23 @@ def direct_volume_ratio_value(row):
 def momentum_field_for_text(text):
     text = compact_text(text)
     has_5 = bool(re.search(r"((最近|近)5(日|个交易日)|5(日|个交易日)(的)?(区间)?涨跌幅)", text))
+    has_10 = bool(re.search(r"((最近|近)10(日|个交易日)|10(日|个交易日)(的)?(区间)?涨跌幅)", text))
     has_20 = bool(re.search(r"((最近|近)20(日|个交易日)|20(日|个交易日)(的)?(区间)?涨跌幅)", text))
     has_60 = bool(re.search(r"((最近|近)60(日|个交易日)|60(日|个交易日)(的)?(区间)?涨跌幅)", text))
-    if sum([has_5, has_20, has_60]) > 1:
+    if sum([has_5, has_10, has_20, has_60]) > 1:
         return "short_momentum"
     if has_60:
         return "long_momentum"
     if has_20:
         return "medium_momentum"
+    if has_10:
+        return "momentum_10d"
     return "short_momentum"
 
 
 def momentum_field_for_row(row, query=""):
     row_text = " ".join([row_item_key(row), row_item_name(row), " ".join(row.keys())])
-    if re.search(r"((最近|近)(5|20|60)(日|个交易日)|(5|20|60)(日|个交易日)(的)?(区间)?涨跌幅)", row_text):
+    if re.search(r"((最近|近)(5|10|20|60)(日|个交易日)|(5|10|20|60)(日|个交易日)(的)?(区间)?涨跌幅)", row_text):
         return momentum_field_for_text(row_text)
     return momentum_field_for_text(query)
 
@@ -1545,6 +1719,8 @@ def apply_market_metric_row(item, row, use_valuation=False):
     subject_type = compact_text(row.get("subject_type", ""))
 
     close = direct_close_value(row)
+    ma5 = direct_ma5_value(row)
+    ma10 = direct_ma10_value(row)
     ma20 = direct_ma20_value(row)
     ma60 = direct_ma60_value(row)
     high_52w = direct_high_52w_value(row)
@@ -1553,6 +1729,10 @@ def apply_market_metric_row(item, row, use_valuation=False):
     volume_ratio = direct_volume_ratio_value(row)
     if close is not None:
         item["close"] = close
+    if ma5 is not None:
+        item["ma5"] = ma5
+    if ma10 is not None:
+        item["ma10"] = ma10
     if ma20 is not None:
         item["ma20"] = ma20
     if ma60 is not None:
@@ -1573,6 +1753,10 @@ def apply_market_metric_row(item, row, use_valuation=False):
             return
         if item_key == "close" or "收盘价" in item_name or "当前股价" in item_name:
             item["close"] = value
+        elif item_key in {"ma5", "avg_close_5d"} or "5日均线" in item_name:
+            item["ma5"] = value
+        elif item_key in {"ma10", "avg_close_10d"} or "10日均线" in item_name:
+            item["ma10"] = value
         elif item_key in {"ma20", "avg_close_20d"} or "20日均线" in item_name:
             item["ma20"] = value
         elif item_key in {"ma60", "avg_close_60d"} or "60日均线" in item_name:
@@ -1620,8 +1804,11 @@ def technical_data_quality(fin_trends_response):
                 "name": name,
                 "momentum": False,
                 "momentum_5d": False,
+                "momentum_10d": False,
                 "momentum_20d": False,
                 "momentum_60d": False,
+                "ma5": False,
+                "ma10": False,
                 "ma20": False,
                 "ma60": False,
                 "close": False,
@@ -1634,6 +1821,8 @@ def technical_data_quality(fin_trends_response):
             field = momentum_field_for_row(row, query=query)
             if field == "short_momentum":
                 item["momentum_5d"] = True
+            elif field == "momentum_10d":
+                item["momentum_10d"] = True
             elif field == "medium_momentum":
                 item["momentum_20d"] = True
             elif field == "long_momentum":
@@ -1646,6 +1835,10 @@ def technical_data_quality(fin_trends_response):
             item["close_history"].append((compact_text(row.get("time_scope_value", "")), value))
         elif direct_close_value(row) is not None or item_key == "close" or "收盘价" in item_name or "当前股价" in item_name:
             item["close"] = True
+        if direct_ma5_value(row) is not None or item_key in {"ma5", "avg_close_5d"} or "5日均线" in item_name:
+            item["ma5"] = True
+        if direct_ma10_value(row) is not None or item_key in {"ma10", "avg_close_10d"} or "10日均线" in item_name:
+            item["ma10"] = True
         if direct_ma20_value(row) is not None or item_key in {"ma20", "avg_close_20d"} or "20日均线" in item_name:
             item["ma20"] = True
         if direct_ma60_value(row) is not None or item_key in {"ma60", "avg_close_60d"} or "60日均线" in item_name:
@@ -1656,6 +1849,10 @@ def technical_data_quality(fin_trends_response):
         close_history = item.get("close_history", [])
         if close_history:
             item["close"] = True
+        if len(close_history) >= 5:
+            item["ma5"] = True
+        if len(close_history) >= 10:
+            item["ma10"] = True
         if len(close_history) >= 20:
             item["ma20"] = True
         if len(close_history) >= 60:
@@ -1665,8 +1862,11 @@ def technical_data_quality(fin_trends_response):
         "total": total,
         "momentum": sum(1 for item in coverage.values() if item["momentum"]),
         "momentum_5d": sum(1 for item in coverage.values() if item["momentum_5d"]),
+        "momentum_10d": sum(1 for item in coverage.values() if item["momentum_10d"]),
         "momentum_20d": sum(1 for item in coverage.values() if item["momentum_20d"]),
         "momentum_60d": sum(1 for item in coverage.values() if item["momentum_60d"]),
+        "ma5": sum(1 for item in coverage.values() if item["ma5"]),
+        "ma10": sum(1 for item in coverage.values() if item["ma10"]),
         "ma20": sum(1 for item in coverage.values() if item["ma20"]),
         "ma60": sum(1 for item in coverage.values() if item["ma60"]),
         "close": sum(1 for item in coverage.values() if item["close"]),
@@ -1683,19 +1883,20 @@ def technical_data_quality_note(fin_trends_response):
         "数据完整性："
         f"识别候选 {total} 只；"
         f"真实涨跌幅覆盖 {quality['momentum']} 只；"
-        f"5/20/60日涨跌幅覆盖 {quality['momentum_5d']}/{quality['momentum_20d']}/{quality['momentum_60d']} 只；"
-        f"20日均线覆盖 {quality['ma20']} 只；"
-        f"60日均线覆盖 {quality['ma60']} 只；"
+        f"5/10/20/60日涨跌幅覆盖 {quality['momentum_5d']}/{quality['momentum_10d']}/{quality['momentum_20d']}/{quality['momentum_60d']} 只；"
+        f"5/10日均线覆盖 {quality['ma5']}/{quality['ma10']} 只；"
         f"收盘价覆盖 {quality['close']} 只；"
         f"52周高点覆盖 {quality['high_52w']} 只。"
         "脚本已禁止把成交额、总市值、PE/PB/PS 等非趋势字段替代为趋势动量。"
     )
 
 
-def format_momentum_summary(short_momentum, medium_momentum, long_momentum):
+def format_momentum_summary(short_momentum, momentum_10d, medium_momentum, long_momentum):
     parts = []
     if short_momentum is not None:
         parts.append(f"5日 {short_momentum:.2f}%")
+    if momentum_10d is not None:
+        parts.append(f"10日 {momentum_10d:.2f}%")
     if medium_momentum is not None:
         parts.append(f"20日 {medium_momentum:.2f}%")
     if long_momentum is not None:
@@ -1708,10 +1909,11 @@ def trend_quality_is_sufficient(fin_trends_response):
     total = max(quality.get("total", 0), EXPECTED_STOCK_COUNT, 1)
     required = trend_required_count(total)
     return (
-        quality.get("momentum", 0) >= required
+        quality.get("momentum_5d", 0) >= required
+        and quality.get("momentum_10d", 0) >= required
         and quality.get("close", 0) >= required
-        and quality.get("ma20", 0) >= required
-        and quality.get("ma60", 0) >= required
+        and quality.get("ma5", 0) >= required
+        and quality.get("ma10", 0) >= required
     )
 
 
@@ -1976,7 +2178,7 @@ def extract_fin_sections(fin_response):
 def fin_section_title(query, content=""):
     if "涨跌幅" in query:
         return "最近涨跌幅"
-    if "20日均线" in query or "60日均线" in query:
+    if "均线" in query:
         if "20日均线" not in content and "60日均线" not in content:
             return "当前股价"
         return "均线与当前股价"
@@ -1989,6 +2191,53 @@ def fin_section_title(query, content=""):
     if any(keyword in query for keyword in ("营业收入", "净利润", "同比")):
         return "成长与业绩"
     return "金融数据查询结果"
+
+
+def _momentum_component(value, preferred_high):
+    if value is None:
+        return None
+    if value < -10:
+        return 10.0
+    if value < 0:
+        return max(20.0, 55.0 + value * 3.5)
+    if value <= preferred_high:
+        return min(95.0, 65.0 + value / preferred_high * 30.0)
+    if value <= preferred_high * 2:
+        return max(60.0, 95.0 - (value - preferred_high) / preferred_high * 35.0)
+    return 45.0
+
+
+def calculate_technical_score(item):
+    """Short-horizon score; market cap and amount are intentionally excluded."""
+    components = [
+        (_momentum_component(item.get("short_momentum"), 6), 0.30, "5日趋势"),
+        (_momentum_component(item.get("momentum_10d"), 12), 0.25, "10日趋势"),
+        (_momentum_component(item.get("medium_momentum"), 20), 0.12, "20日趋势"),
+        (_momentum_component(item.get("long_momentum"), 35), 0.05, "60日趋势"),
+    ]
+    close, ma5, ma10, ma20 = (item.get(key) for key in ("close", "ma5", "ma10", "ma20"))
+    ma_score = None
+    if None not in (close, ma5, ma10):
+        if close >= ma5 >= ma10 and (ma20 is None or ma10 >= ma20):
+            ma_score = 95.0
+        elif close >= ma10 and ma5 >= ma10:
+            ma_score = 78.0
+        elif close >= ma10:
+            ma_score = 62.0
+        else:
+            ma_score = 30.0
+    components.append((ma_score, 0.18, "短期均线"))
+    volume_ratio = item.get("volume_ratio_5d")
+    volume_score = None
+    if volume_ratio is not None:
+        volume_score = 90.0 if 1.15 <= volume_ratio <= 2.0 else (65.0 if 0.8 <= volume_ratio < 1.15 else 45.0)
+    components.append((volume_score, 0.10, "5日量能"))
+    available = [(value, weight, label) for value, weight, label in components if value is not None]
+    if not available:
+        return None
+    weight_sum = sum(weight for _, weight, _ in available)
+    score = sum(value * weight for value, weight, _ in available) / weight_sum
+    return round(score, 1)
 
 
 def build_local_technical_top5(fin_trends_response, limit=5):
@@ -2011,13 +2260,15 @@ def build_local_technical_top5(fin_trends_response, limit=5):
                 item["short_name"] = clean_stock_name(name)
                 apply_market_metric_row(item, row, use_valuation=use_valuation)
                 apply_momentum_row(item, row, query=query)
-        elif "20日均线" in query and "60日均线" in query:
+        elif "均线" in query:
             for row in rows:
                 name = row_stock_name(row)
                 code = row_stock_code(row)
                 item_key = row_item_key(row)
                 item_name = row_item_name(row)
                 value = row_metric_value(row)
+                ma5 = direct_ma5_value(row)
+                ma10 = direct_ma10_value(row)
                 ma20 = direct_ma20_value(row)
                 ma60 = direct_ma60_value(row)
                 close = direct_close_value(row)
@@ -2030,12 +2281,20 @@ def build_local_technical_top5(fin_trends_response, limit=5):
                 apply_market_metric_row(item, row, use_valuation=use_valuation)
                 if value is not None:
                     normalized = f"{item_key} {item_name}".lower()
-                    if "ma20" in normalized or "20日均线" in normalized:
+                    if "ma5" in normalized or "5日均线" in normalized:
+                        ma5 = value
+                    elif "ma10" in normalized or "10日均线" in normalized:
+                        ma10 = value
+                    elif "ma20" in normalized or "20日均线" in normalized:
                         ma20 = value
                     elif "ma60" in normalized or "60日均线" in normalized:
                         ma60 = value
                     elif item_key == "close" or "收盘价" in item_name or "当前股价" in item_name:
                         close = value
+                if ma5 is not None:
+                    item["ma5"] = ma5
+                if ma10 is not None:
+                    item["ma10"] = ma10
                 if ma20 is not None:
                     item["ma20"] = ma20
                 if ma60 is not None:
@@ -2098,11 +2357,12 @@ def build_local_technical_top5(fin_trends_response, limit=5):
                 value = row_metric_value(row)
                 pe_value = direct_number(row, ("市盈率(TTM)", "市盈率", "PE(TTM)"), ("市盈率",))
                 pb_value = direct_number(row, ("市净率", "市净率(LF)", "PB"), ("市净率",))
-                if value is None and pe_value is None and pb_value is None:
+                if value is None and pe_value is None and pb_value is None and direct_volume_ratio_value(row) is None:
                     continue
                 item = metrics.setdefault(code, {"code": code, "name": name}) if code else find_metric_by_name(metrics, name)
                 if item is None:
                     continue
+                apply_market_metric_row(item, row, use_valuation=use_valuation)
                 normalized_key = compact_text(item_key or item_name).lower()
                 normalized_name = compact_text(item_name or item_key).lower()
                 if pe_value is not None:
@@ -2115,7 +2375,7 @@ def build_local_technical_top5(fin_trends_response, limit=5):
                     item["pb"] = value
 
     for item in metrics.values():
-        for field in ("short_momentum", "medium_momentum", "long_momentum"):
+        for field in ("short_momentum", "momentum_10d", "medium_momentum", "long_momentum"):
             daily_changes = item.get(f"_{field}_daily_changes")
             cumulative = cumulative_percent(daily_changes or [])
             if cumulative is not None:
@@ -2132,6 +2392,10 @@ def build_local_technical_top5(fin_trends_response, limit=5):
             ]
             if latest_first:
                 item["close"] = latest_first[0]
+            if len(latest_first) >= 5:
+                item["ma5"] = sum(latest_first[:5]) / 5
+            if len(latest_first) >= 10:
+                item["ma10"] = sum(latest_first[:10]) / 10
             if len(latest_first) >= 20:
                 item["ma20"] = sum(latest_first[:20]) / 20
             if len(latest_first) >= 60:
@@ -2146,6 +2410,7 @@ def build_local_technical_top5(fin_trends_response, limit=5):
         if item.get("distance_52w_high") is None and item.get("close") and item.get("high_52w"):
             item["distance_52w_high"] = (item["close"] / item["high_52w"] - 1) * 100
         short_momentum = item.get("short_momentum")
+        momentum_10d = item.get("momentum_10d")
         medium_momentum = item.get("medium_momentum")
         long_momentum = item.get("long_momentum")
         momentum = short_momentum if short_momentum is not None else medium_momentum
@@ -2159,99 +2424,45 @@ def build_local_technical_top5(fin_trends_response, limit=5):
         growth = growth_by_code.get(item["code"], {})
         revenue_yoy = growth.get("revenue_yoy")
         profit_yoy = growth.get("profit_yoy")
-        if momentum is None and (ma20 is None or ma60 is None):
+        if short_momentum is None and momentum_10d is None:
             continue
 
-        score = 58.0
+        score = calculate_technical_score(item)
+        if score is None:
+            continue
         reasons = []
         risks = []
-
-        if momentum is not None:
-            if 0 <= momentum <= 6:
-                score += 18 + momentum * 1.5
-                reasons.append("短线动量温和增强" if short_momentum is not None else "阶段动量温和增强")
-            elif 6 < momentum <= 12:
-                score += 18
-                reasons.append("短线强势但需防追高" if short_momentum is not None else "阶段强势但需防追高")
-                risks.append("短期涨幅偏快" if short_momentum is not None else "阶段涨幅偏快")
-            elif momentum < 0:
-                score += max(-8, momentum * 2)
-                risks.append("短线动量偏弱" if short_momentum is not None else "阶段动量偏弱")
-            else:
-                score += 8
-                risks.append("短期过热风险上升" if short_momentum is not None else "阶段过热风险上升")
-
-        if medium_momentum is not None and long_momentum is not None:
-            if medium_momentum > 0 and long_momentum > 0:
-                score += 14
-                reasons.append("20/60日趋势同向为正，作为主要评分依据")
-            elif medium_momentum < 0 and long_momentum < 0:
-                score -= 12
-                risks.append("20/60日趋势同向偏弱")
-        elif medium_momentum is not None:
-            if medium_momentum > 0:
-                score += 5
-            elif medium_momentum < 0:
-                score -= 5
-
-        market_cap_yi = item.get("market_cap_yi")
-        amount_wan = item.get("amount_wan")
         volume_ratio_5d = item.get("volume_ratio_5d")
-        if market_cap_yi is not None:
-            if market_cap_yi >= PREFERRED_MARKET_CAP_YI:
-                score += 10
-                reasons.append("大市值偏好")
-            elif market_cap_yi >= 300:
-                score += 5
-                reasons.append("中大市值")
-            elif market_cap_yi >= MIN_MARKET_CAP_YI:
-                score += 1
-                risks.append("市值仅达到最低门槛")
-        if amount_wan is not None and amount_wan >= MIN_DAILY_AMOUNT_WAN:
-            reasons.append("当日成交额达到5亿元门槛")
-        if volume_ratio_5d is not None:
-            if volume_ratio_5d >= 1.5:
-                score += 8
-                reasons.append("近5日量能明显放大")
-            elif volume_ratio_5d >= MIN_VOLUME_RATIO_5D:
-                score += 4
-                reasons.append("近5日量能温和放大")
-            elif volume_ratio_5d < 0.8:
-                score -= 4
-                risks.append("近5日量能未放大")
+        if short_momentum is not None and short_momentum > 0:
+            reasons.append("5日趋势为正")
+        elif short_momentum is not None:
+            risks.append("5日趋势偏弱")
+        if momentum_10d is not None and momentum_10d > 0:
+            reasons.append("10日趋势为正")
+        elif momentum_10d is not None:
+            risks.append("10日趋势偏弱")
+        ma5, ma10 = item.get("ma5"), item.get("ma10")
+        if None not in (item.get("close"), ma5, ma10) and item["close"] >= ma5 >= ma10:
+            reasons.append("股价站上5/10日均线且短期均线多头")
+            structure = "短线趋势延续"
+        elif None not in (item.get("close"), ma10) and item["close"] >= ma10:
+            structure = "短线整理"
         else:
-            score -= 2
-            risks.append("近5日量能数据缺失")
-
-        if ma20 is not None and ma60 is not None:
-            if ma20 > ma60 and above_ma20 and above_ma60:
-                score += 14
-                reasons.append("站上20/60日均线且20日线高于60日线")
-                structure = "趋势延续"
-            elif ma20 > ma60 and above_ma60:
-                score += 6
-                reasons.append("中期均线仍偏多")
-                risks.append("短线低于20日线")
-                structure = "回调观察"
-            else:
-                score -= 10
-                risks.append("均线结构偏弱或股价低于关键均线")
-                structure = "回调观察"
-        else:
-            structure = "数据待确认"
-            risks.append("均线数据不完整")
+            structure = "回调观察"
+            risks.append("短期均线结构偏弱或数据不完整")
+        if volume_ratio_5d is not None and volume_ratio_5d >= MIN_VOLUME_RATIO_5D:
+            reasons.append("近5日量能温和放大")
+        elif volume_ratio_5d is not None and volume_ratio_5d < 0.8:
+            risks.append("近5日量能不足")
 
         if distance_52w_high is not None:
             if distance_52w_high > -5:
-                score -= 5
                 risks.append("距离52周高点较近")
                 position_risk = "接近前高"
             elif distance_52w_high < -30:
-                score -= 2
                 risks.append("距离前高较远，需确认修复持续性")
                 position_risk = "低位修复"
             else:
-                score += 4
                 position_risk = "中位趋势"
         else:
             position_risk = "待确认"
@@ -2294,7 +2505,7 @@ def build_local_technical_top5(fin_trends_response, limit=5):
                 "技术结构分": score,
                 "结构状态": structure,
                 "补充维度": " / ".join(valuation or supplement) if (valuation or supplement) else "暂无",
-                "趋势动量": format_momentum_summary(short_momentum, medium_momentum, long_momentum),
+                "趋势动量": format_momentum_summary(short_momentum, momentum_10d, medium_momentum, long_momentum),
                 "量价K线": candle,
                 "缠论结构": chan,
                 "位置风险": position_risk,
@@ -2322,7 +2533,7 @@ def technical_top5_markdown(fin_trends_response):
             [
                 opening,
                 technical_data_quality_note(fin_trends_response),
-                "建议：继续补齐真实涨跌幅、收盘价、20/60日均线和52周位置；在补数达标前，本轮只作为候选观察池，不输出正式技术 TOP5。",
+                "建议：继续补齐真实5/10日涨跌幅、收盘价和5/10日均线；在补数达标前，本轮只作为候选观察池，不输出正式技术 TOP5。",
             ]
         )
     headers = [
@@ -2358,33 +2569,24 @@ def technical_top5_markdown(fin_trends_response):
     return "\n".join(lines)
 
 
-def detect_themes(items):
-    keywords = [
-        "AI算力",
-        "人工智能",
-        "半导体",
-        "机器人",
-        "CPO",
-        "低空经济",
-        "创新药",
-        "储能",
-        "存储芯片",
-        "先进封装",
-    ]
-    counts = {key: 0 for key in keywords}
+def detect_themes(items, seed_themes=None):
+    """Extract themes from today's evidence without a built-in theme dictionary."""
+    counts = {compact_text(name): 1 for name in (seed_themes or []) if compact_text(name)}
     for item in items:
-        text = f"{item.get('title', '')} {item.get('snippet', '')}"
-        for key in keywords:
-            if key in text:
-                counts[key] += 1
-    ranked = sorted(((key, value) for key, value in counts.items() if value), key=lambda x: -x[1])
-    return ranked[:6]
+        text = compact_text(f"{item.get('title', '')} {item.get('snippet', '')}")
+        candidates = re.findall(r"([A-Za-z0-9\u4e00-\u9fff]{2,12})(?:概念|板块|产业链|赛道)", text)
+        if "：" in text or ":" in text:
+            tail = re.split(r"[：:]", text, maxsplit=1)[-1]
+            candidates.extend(re.split(r"[+、，,;/|\s]+", tail)[:4])
+        for name in candidates:
+            name = compact_text(name).strip("，。；：")
+            if 2 <= len(name) <= 12 and name not in HOT_TOPIC_MARKERS:
+                counts[name] = counts.get(name, 0) + 1
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:12]
 
 
-def interpret_hotspots(items):
-    raw_themes = detect_themes(items)
-    if not raw_themes:
-        raw_themes = [(theme, 0) for theme in DEFAULT_HOT_THEMES[:4]]
+def interpret_hotspots(items, seed_themes=None):
+    raw_themes = detect_themes(items, seed_themes=seed_themes)
 
     analyses = []
     for theme, count in raw_themes:
@@ -2412,7 +2614,7 @@ def interpret_hotspots(items):
             action = "可进入重点候选池"
         elif score >= 60:
             quality = "可跟踪热点"
-            action = "进入候选池但降低追高权重"
+            action = "进入候选池，后续独立评分并提示追高风险"
         elif negative_hits:
             quality = "分化/过热热点"
             action = "只观察龙头和低位修复，不因热点直接加分"
@@ -2451,36 +2653,26 @@ def interpret_hotspots(items):
 def hotspot_interpretation_markdown(rows):
     if not rows:
         return "暂无足够热点信息进行质量解读。"
-    headers = ["主题", "热点质量分", "有效资讯", "独立来源", "验证状态", "质量判断", "支撑因素", "风险信号", "选股处理"]
+    headers = ["主题", "市场证据", "独立来源", "验证状态", "质量判断", "支撑因素", "风险信号", "选股处理"]
     lines = [
         "| " + " | ".join(headers) + " |",
         "| " + " | ".join("---" for _ in headers) + " |",
     ]
     for row in rows:
-        display = dict(row, **{"有效资讯": row.get("热度次数"), "独立来源": row.get("来源数")})
+        display = dict(row, **{"市场证据": row.get("热度次数"), "独立来源": row.get("来源数")})
         lines.append("| " + " | ".join(str(display.get(header, "")) for header in headers) + " |")
     lines.extend(
         [
             "",
-            "说明：热点只作为第一层过滤，不等同于投资价值。出现退潮、高位、资金流出、估值过高等信号时，候选股会降权，必须再通过趋势、成长、估值完整性和风险检查。",
+            "说明：市场源热点和板块涨跌只用于候选召回，不直接加分或降分；新闻仅作为可选的个股舆情补充。最终结果必须再通过技术趋势、成长估值、板块资金和事件风险检查。",
         ]
     )
     return "\n".join(lines)
 
 
-def latest_theme_names(payloads):
-    ai_items = fresh_search_items(payloads["search_ai_news"][1])
-    market_items = fresh_search_items(payloads["search_market_hotspots"][1])
-    interpreted = interpret_hotspots(combine_fresh_news(market_items, ai_items, limit=20))
-    names = [
-        row["主题"]
-        for row in interpreted
-        if row["热点质量分"] >= 55 and row["质量判断"] != "弱确认热点"
-    ]
-    for theme in DEFAULT_HOT_THEMES:
-        if theme not in names:
-            names.append(theme)
-    return names[:8]
+def latest_theme_names(payloads, seed_themes=None):
+    """Compatibility wrapper: theme names now come from market-source rows only."""
+    return [row.get("主题") for row in (payloads.get("theme_rows") or []) if row.get("主题")][:12] or list(seed_themes or [])[:12]
 
 
 def build_candidate_query(themes):
@@ -2490,25 +2682,20 @@ def build_candidate_query(themes):
         f"围绕{theme_text}等方向筛选20到30只值得进一步研究的A股上市公司。"
         "这里只需要候选名单，不要查询行情、涨跌幅、财务、估值或成交额。"
         "必须只返回表格，列为：股票代码、股票名称、所属主题、热点触发、主营关联度、主要风险。"
-        "不要返回全市场列表，不要返回退市股、ST股、北交所股票，不要给买入卖出建议。"
+        "不要返回全市场列表，不要给买入卖出建议。"
     )
 
 
 def candidate_rows_from_response(fin_candidates_response, themes=None, limit=MAX_CANDIDATES_FOR_TRENDS):
-    themes = themes or DEFAULT_HOT_THEMES
+    direct_candidates = fin_candidates_response.get("candidates") or []
+    if direct_candidates:
+        return [dict(row) for row in direct_candidates[:limit]]
     sections = extract_fin_sections(fin_candidates_response)
     if any(section["status"] != "success" or "SQL代码执行失败" in section["content"] for section in sections):
-        return curated_candidate_rows(themes, limit=limit)
+        return []
 
     rows = []
     seen = set()
-    theme_terms = set(THEME_KEYWORDS)
-    for theme in themes:
-        theme_terms.add(theme)
-        for part in re.split(r"[/、\s]+", theme):
-            if part:
-                theme_terms.add(part)
-
     for section in sections:
         for row in rows_to_dicts(section["content"]):
             headers = set(row.keys())
@@ -2518,22 +2705,6 @@ def candidate_rows_from_response(fin_candidates_response, themes=None, limit=MAX
             name = row_stock_name(row)
             if not code or not name or code in seen:
                 continue
-            if code.endswith(".BJ") or "ST" in name.upper() or "退" in name:
-                continue
-
-            row_text = compact_text(" ".join(str(value) for value in row.values()))
-            score = 0
-            for term in theme_terms:
-                if term and term in row_text:
-                    score += 3
-            for key in ("热点触发", "近期催化", "主营关联度", "近期趋势", "成长质量"):
-                if not clean_missing_cell(row.get(key, "")):
-                    score += 2
-            if any(term in row_text for term in ("光模块", "CPO", "算力", "半导体", "机器人", "低空", "创新药", "储能")):
-                score += 4
-            if "风险" in row_text and not clean_missing_cell(row_text):
-                score += 1
-
             rows.append(
                 {
                     "股票代码": code,
@@ -2544,17 +2715,11 @@ def candidate_rows_from_response(fin_candidates_response, themes=None, limit=MAX
                     "主要风险": compact_text(row.get("主要风险") or row.get("风险") or "")[:120],
                     "市值(亿元)": row.get("市值(亿元)", ""),
                     "成交额(万元)": row.get("成交额(万元)", ""),
-                    "_score": score,
                 }
             )
             seen.add(code)
 
-    rows.sort(key=lambda row: row["_score"], reverse=True)
-    useful = [row for row in rows if row["_score"] > 0]
-    selected = (useful or rows)[:limit]
-    if selected:
-        return selected
-    return curated_candidate_rows(themes, limit=limit)
+    return rows[:limit]
 
 
 def apply_hotspot_quality_to_candidates(rows, hotspot_rows):
@@ -2571,7 +2736,6 @@ def apply_hotspot_quality_to_candidates(rows, hotspot_rows):
             row = dict(row)
             row["热点质量"] = matched["质量判断"]
             row["热点处理"] = matched["选股处理"]
-            row["_score"] = row.get("_score", 0) + max(-2, int((matched["热点质量分"] - 60) / 15))
             if matched["质量判断"] == "分化/过热热点":
                 row["主要风险"] = compact_text(row.get("主要风险", "") + "；热点存在分化或过热信号")
             adjusted.append(row)
@@ -2580,7 +2744,6 @@ def apply_hotspot_quality_to_candidates(rows, hotspot_rows):
             row["热点质量"] = "待确认"
             row["热点处理"] = "不因热点直接加分"
             adjusted.append(row)
-    adjusted.sort(key=lambda item: item.get("_score", 0), reverse=True)
     return adjusted
 
 
@@ -2616,44 +2779,9 @@ def candidate_rows_markdown(rows):
     return "\n".join(lines)
 
 
-def curated_candidate_rows(themes, limit=MAX_CANDIDATES_FOR_TRENDS):
-    rows = []
-    seen = set()
-    selected_themes = list(themes or DEFAULT_HOT_THEMES)
-    for default_theme in DEFAULT_HOT_THEMES:
-        if default_theme not in selected_themes:
-            selected_themes.append(default_theme)
-
-    for theme in selected_themes:
-        matching_keys = [key for key in THEME_STOCK_UNIVERSE if key in theme or theme in key]
-        if not matching_keys and ("AI" in theme or "算力" in theme):
-            matching_keys = ["AI算力", "人工智能"]
-        if not matching_keys and "芯片" in theme:
-            matching_keys = ["半导体", "存储芯片"]
-        for key in matching_keys:
-            for code, name in THEME_STOCK_UNIVERSE.get(key, []):
-                if code in seen:
-                    continue
-                rows.append(
-                    {
-                        "股票代码": code,
-                        "股票名称": name,
-                        "所属主题": key,
-                        "热点触发": f"最近热点扫描命中：{theme}",
-                        "主营关联度": f"{name}与{key}产业链相关",
-                        "主要风险": "需结合估值、业绩兑现和技术位置二次确认",
-                        "_score": 1,
-                    }
-                )
-                seen.add(code)
-                if len(rows) >= limit:
-                    return rows
-    return rows[:limit]
-
-
 def candidate_stock_text(candidate_rows):
     if not candidate_rows:
-        return "中际旭创、工业富联、新易盛、天孚通信、寒武纪、北方华创、中微公司、汇川技术、机器人、万丰奥威、药明康德"
+        return "无候选"
     return "、".join(f"{row['股票名称']}({row['股票代码']})" for row in candidate_rows)
 
 
@@ -2666,7 +2794,7 @@ def build_trend_query(candidate_rows):
     stock_text = candidate_stock_text(candidate_rows)
     return (
         f"请对以下A股候选股票进行横向比较：{stock_text}。"
-        "查询最近5日、20日、60日涨跌幅，20日/60日均线趋势，成交额变化，距离52周高点位置，"
+        "查询最近5日、10日、20日、60日涨跌幅，5日/10日/20日/60日均线趋势，成交额变化，距离52周高点位置，"
         "市盈率或市净率等估值水平，营业收入同比和净利润同比增速。"
         "请尽量使用完整表格返回，并标记趋势状态：强趋势、低位修复、回调观察、高位谨慎或趋势破坏。"
         "如果某些估值字段缺失，请保留其他完整字段，不要编造数字。"
@@ -2909,7 +3037,10 @@ def make_html_report(run_id, payloads):
     ai_items = fresh_search_items(payloads["search_ai_news"][1])
     market_items = fresh_search_items(payloads["search_market_hotspots"][1])
     combined = combine_fresh_news(market_items, ai_items, limit=12)
-    hotspot_rows = interpret_hotspots(combined)
+    run_context = payloads.get("run_context") or {}
+    market_date = run_context.get("market_date") or datetime.now().strftime("%Y-%m-%d")
+    snapshot_label = "非交易日复盘" if run_context.get("non_trading_replay") else "交易日快照"
+    hotspot_rows = payloads.get("theme_rows") or []
     hotspot_markdown = hotspot_interpretation_markdown(hotspot_rows)
     valuation_allowed = valuation_is_complete(collect_valuation_metrics(payloads["fin_trends"][1]))
     selected_candidates = payloads.get("selected_candidates", [])
@@ -2941,7 +3072,7 @@ def make_html_report(run_id, payloads):
             <article class="metric">
               <span>{escape(hotspot['主题'])}</span>
               <strong>{hotspot['热点质量分']:g}</strong>
-              <small>有效资讯 {hotspot['热度次数']} · 独立来源 {hotspot['来源数']}</small>
+              <small>市场证据 {hotspot['热度次数']} · 独立来源 {hotspot['来源数']}</small>
               <small>{escape(hotspot['验证状态'])}</small>
             </article>
             """
@@ -3160,7 +3291,7 @@ def make_html_report(run_id, payloads):
       <div class="stamp">
         <div>Run ID：{escape(run_id)}</div>
         <div>{escape(generated_at)}</div>
-        <div>A股 · 最近3天有效资讯 · {"盘中快照" if datetime.now().hour < 15 else "收盘后快照"}</div>
+        <div>A股 · 数据基准 {escape(market_date)} · {snapshot_label}</div>
       </div>
     </header>
 
@@ -3169,14 +3300,14 @@ def make_html_report(run_id, payloads):
     </section>
 
     <section class="section">
-      <h2>自动热点扫描</h2>
+      <h2>资讯背景（不参与题材发现）</h2>
       <ol class="news-list">
         {''.join(news_html)}
       </ol>
     </section>
 
     <section class="section">
-      <h2>热点解读与筛选门槛</h2>
+      <h2>题材来源与筛选门槛</h2>
       {hotspot_html}
     </section>
 
@@ -3244,7 +3375,14 @@ def make_report(run_id, payloads):
     ai_items = fresh_search_items(payloads["search_ai_news"][1])
     market_items = fresh_search_items(payloads["search_market_hotspots"][1])
     combined = combine_fresh_news(market_items, ai_items, limit=12)
-    hotspot_text = hotspot_interpretation_markdown(interpret_hotspots(combined))
+    run_context = payloads.get("run_context") or {}
+    market_date = run_context.get("market_date") or datetime.now().strftime("%Y-%m-%d")
+    snapshot_label = "非交易日复盘，使用最近交易日数据" if run_context.get("non_trading_replay") else "交易日数据"
+    hotspot_text = hotspot_interpretation_markdown(payloads.get("theme_rows") or [])
+    theme_source_text = _format_table(
+        ["题材来源", "本轮记录数"],
+        [{"题材来源": name, "本轮记录数": count} for name, count in (payloads.get("theme_sources") or {}).items()],
+    ) if payloads.get("theme_sources") else "暂无题材来源记录。"
     valuation_allowed = valuation_is_complete(collect_valuation_metrics(payloads["fin_trends"][1]))
     selected_candidates = payloads.get("selected_candidates", [])
     candidates_text = candidate_rows_markdown(selected_candidates) or candidate_display_markdown(
@@ -3283,11 +3421,15 @@ def make_report(run_id, payloads):
         "# 智能选股工作流试跑报告",
         "",
         f"- 运行时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        "- 范围：A股，最近3天资讯 + 可得金融数据",
+        f"- 范围：A股，{snapshot_label}（数据基准日：{market_date}）+ 最近3天资讯",
         f"- 候选池：根据最新热点动态筛选 {len(selected_candidates) if selected_candidates else '若干'} 只，不再固定少数股票",
         "- 说明：这是投研辅助报告，不构成买卖建议。",
         "",
-        "## 1. 自动热点扫描",
+        "## 1. 市场源热点题材（不依赖新闻）",
+        "",
+        hotspot_text,
+        "",
+        "## 2. 资讯背景（不参与题材发现）",
         "",
     ]
 
@@ -3309,51 +3451,53 @@ def make_report(run_id, payloads):
     lines.extend(
         [
             "",
-            "## 2. 热点解读与筛选门槛",
+            "## 3. 题材来源与筛选门槛",
             "",
-            hotspot_text,
+            theme_source_text,
             "",
-            "## 3. 市场温度与题材共振",
+            "说明：题材只由同花顺热点/涨停归因、同花顺热股标签、东方财富板块目录及板块涨跌前五构建；新闻不参与题材发现，也不直接给候选加分。",
+            "",
+            "## 4. 市场温度与题材共振",
             "",
             market_text,
             "",
-            "## 4. 综合研究 TOP 5",
+            "## 5. 综合研究 TOP 5",
             "",
             composite_text,
             "",
-            "## 5. " + ("技术候选 TOP 10" if payloads.get("formal_ranking") else "技术观察候选（趋势待确认）"),
+            "## 6. " + ("技术候选 TOP 10" if payloads.get("formal_ranking") else "技术观察候选（趋势待确认）"),
             "",
             technical_candidates_text,
             "",
-            "## 6. 候选股票池查询结果",
+            "## 7. 候选股票池查询结果",
             "",
             candidates_text[:5000],
             "",
-            "## 7. 成长估值与机构覆盖",
+            "## 8. 成长估值与机构覆盖",
             "",
             enhanced_valuation_text,
             "",
-            "## 8. 公告、解禁与资金风险体检",
+            "## 9. 公告、解禁与资金风险体检",
             "",
             risk_text,
             "",
-            "## 9. 估值指标",
+            "## 10. 估值指标",
             "",
             valuation_text or "估值指标覆盖不完整，本轮不展示、不参与评分。",
             "",
-            "## 10. 成长与业绩指标",
+            "## 11. 成长与业绩指标",
             "",
             growth_text or "成长与业绩指标覆盖不完整，本轮不展示、不参与评分。",
             "",
-            "## 11. 历史股价与趋势查询结果",
+            "## 12. 历史股价与趋势查询结果",
             "",
             trend_text,
             "",
-            "## 12. 数据来源、降级与覆盖",
+            "## 13. 数据来源、降级与覆盖",
             "",
             quality_text,
             "",
-            "## 13. 本轮流程结论",
+            "## 14. 本轮流程结论",
             "",
             *conclusion_lines,
         ]
@@ -3378,7 +3522,7 @@ def main():
         "--max-candidates",
         type=int,
         default=MAX_CANDIDATES_FOR_TRENDS,
-        help="Maximum candidates entering trend analysis (default: 25).",
+        help="Maximum candidates entering trend analysis (default: 50).",
     )
     parser.add_argument(
         "--enrichment-limit",
@@ -3390,10 +3534,17 @@ def main():
     MAX_CANDIDATES_FOR_TRENDS = max(1, min(50, args.max_candidates))
     enrichment_limit = max(1, min(10, args.enrichment_limit))
 
-    verified_trade_time = verified_a_share_trade_date()
+    requested_time = datetime.now()
+    verified_trade_time = verified_a_share_trade_date(requested_time, allow_previous=True)
     if verified_trade_time is None:
-        print("skip: 今天不是已核验的中国 A 股交易日；未访问市场数据、未写入报告。")
+        print("skip: 未找到可核验的中国 A 股交易日；未访问市场数据、未写入报告。")
         return
+    non_trading_replay = verified_trade_time.date() != requested_time.date()
+    if non_trading_replay:
+        print(
+            f"notice: 今天不是交易日，本轮使用最近交易日 {verified_trade_time.strftime('%Y-%m-%d')} 数据复盘。",
+            flush=True,
+        )
 
     configure_output_dir(args.output_dir)
 
@@ -3403,10 +3554,15 @@ def main():
     run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
 
     payloads = {}
+    payloads["run_context"] = {
+        "requested_date": requested_time.strftime("%Y-%m-%d"),
+        "market_date": verified_trade_time.strftime("%Y-%m-%d"),
+        "non_trading_replay": non_trading_replay,
+    }
 
     print("running search_market_hotspots...", flush=True)
     status, response = 200, free_search(
-        "A股 今日热点 板块 政策 利好 资金流向 涨停原因 人工智能 半导体 机器人 低空经济 创新药",
+        "A股 今日热点题材 板块涨跌 政策催化 资金流向 涨停跌停原因",
         count=12,
     )
     payloads["search_market_hotspots"] = (status, response)
@@ -3416,7 +3572,7 @@ def main():
 
     print("running search_ai_news...", flush=True)
     status, response = 200, free_search(
-        "AI 人工智能 最新消息 大模型 算力 芯片 机器人 应用 政策 A股 相关公司",
+        "A股 今日产业催化 热门概念 上市公司订单 业绩 政策",
         count=12,
     )
     payloads["search_ai_news"] = (status, response)
@@ -3424,16 +3580,76 @@ def main():
         json.dump({"status": status, "response": response}, file, ensure_ascii=False, indent=2)
     time.sleep(1)
 
-    themes = latest_theme_names(payloads)
-    hotspot_rows = interpret_hotspots(
-        combine_fresh_news(
-            fresh_search_items(payloads["search_market_hotspots"][1]),
-            fresh_search_items(payloads["search_ai_news"][1]),
-            limit=20,
-        )
+    try:
+        _, ths_reason_rows = _latest_ths_hot_rows(as_of=verified_trade_time)
+    except Exception as exc:
+        print(f"warning: 同花顺题材归因不可用: {exc}", file=sys.stderr)
+        ths_reason_rows = []
+    if not ths_reason_rows:
+        try:
+            ths_reason_rows = _ths_limit_up_reason_rows(trade_date=verified_trade_time.strftime("%Y%m%d"))
+            if ths_reason_rows:
+                print("notice: 已切换同花顺涨停揭秘题材归因备源", flush=True)
+        except Exception as exc:
+            print(f"warning: 同花顺涨停揭秘备源不可用: {exc}", file=sys.stderr)
+
+    try:
+        ths_hot_rows = _ths_hot_stocks(HOT_STOCK_LIMIT)
+    except Exception as exc:
+        print(f"warning: 同花顺热股不可用，本轮透明降级: {exc}", file=sys.stderr)
+        ths_hot_rows = []
+    try:
+        xueqiu_hot_rows = _xueqiu_hot_stocks(HOT_STOCK_LIMIT)
+    except Exception as exc:
+        print(f"warning: 雪球热股不可用，本轮透明降级: {exc}", file=sys.stderr)
+        xueqiu_hot_rows = []
+    try:
+        board_catalog = _board_catalog_rows()
+        board_movers = _board_movers(board_catalog=board_catalog)
+    except Exception as exc:
+        print(f"warning: 板块涨跌前后五不可用: {exc}", file=sys.stderr)
+        board_catalog = []
+        board_movers = []
+    themes = dynamic_theme_names(
+        ths_reason_rows=ths_reason_rows,
+        ths_hot_rows=ths_hot_rows,
+        xueqiu_hot_rows=xueqiu_hot_rows,
+        board_catalog=board_catalog,
+        board_movers=board_movers,
     )
+    theme_rows = market_theme_rows(
+        ths_reason_rows=ths_reason_rows,
+        ths_hot_rows=ths_hot_rows,
+        xueqiu_hot_rows=xueqiu_hot_rows,
+        board_catalog=board_catalog,
+        board_movers=board_movers,
+    )
+    payloads["theme_rows"] = theme_rows
+    ths_reason_source = "同花顺涨停揭秘备源" if any(row.get("source") == "同花顺涨停揭秘" for row in ths_reason_rows) else "同花顺热点归因"
+    payloads["theme_sources"] = {
+        ths_reason_source: len(ths_reason_rows),
+        "同花顺热股前10": len(ths_hot_rows),
+        "雪球热股前10": len(xueqiu_hot_rows),
+        "东方财富板块目录": len(board_catalog),
+        "东方财富板块涨跌前五": len(board_movers),
+    }
+    combined_news = combine_fresh_news(
+        fresh_search_items(payloads["search_market_hotspots"][1]),
+        fresh_search_items(payloads["search_ai_news"][1]),
+        limit=20,
+    )
+    # News remains an optional downstream sentiment input; it does not create
+    # themes or expand the candidate pool.
+    hotspot_rows = theme_rows
     print("running fin_candidates...", flush=True)
-    response = free_candidates(themes)
+    response = free_candidates(
+        themes,
+        ths_reason_rows=ths_reason_rows,
+        board_movers=board_movers,
+        board_catalog=board_catalog,
+        ths_hot_rows=ths_hot_rows,
+        xueqiu_hot_rows=xueqiu_hot_rows,
+    )
     if not response.get("result"):
         response = {"success": True, "result": []}
     status = 200
@@ -3441,7 +3657,7 @@ def main():
     with (DATA_DIR / f"{run_id}-fin_candidates.json").open("w", encoding="utf-8") as file:
         json.dump({"status": status, "response": response}, file, ensure_ascii=False, indent=2)
     selected_candidates = enforce_candidate_constraints(candidate_rows_from_response(response, themes=themes))
-    selected_candidates = diversify_candidates(apply_hotspot_quality_to_candidates(selected_candidates, hotspot_rows))
+    selected_candidates = apply_hotspot_quality_to_candidates(selected_candidates, hotspot_rows)
     payloads["selected_candidates"] = selected_candidates
     EXPECTED_STOCK_COUNT = max(5, len(selected_candidates))
     with (DATA_DIR / f"{run_id}-selected_candidates.json").open("w", encoding="utf-8") as file:
@@ -3473,7 +3689,11 @@ def main():
     # Per-stock concept validation is deliberately limited to the enriched list;
     # it is useful evidence, but must not turn a broad candidate scan into a
     # high-frequency Eastmoney batch.
-    market_context = collect_market_context(technical_candidates)
+    market_context = collect_market_context(
+        technical_candidates,
+        trade_date=verified_trade_time.strftime("%Y%m%d"),
+        news_items=combined_news,
+    )
     payloads["market_context"] = market_context
     with (DATA_DIR / f"{run_id}-market-context.json").open("w", encoding="utf-8") as file:
         json.dump(market_context, file, ensure_ascii=False, indent=2)

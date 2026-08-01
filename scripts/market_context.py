@@ -27,6 +27,14 @@ def _weighted_score(components: list[tuple[float | None, float]]) -> float | Non
     return round(sum(value * weight for value, weight in available) / total_weight, 1)
 
 
+def _as_float(value: Any) -> float | None:
+    try:
+        number = float(value)
+        return number if number == number else None
+    except (TypeError, ValueError):
+        return None
+
+
 def calculate_market_temperature(
     industries: list[dict[str, Any]] | None,
     limit_up: list[dict[str, Any]] | None,
@@ -71,37 +79,58 @@ def calculate_theme_resonance(
     industries: list[dict[str, Any]] | None,
     concept_blocks: dict[str, list[str]] | None = None,
     board_funds: list[dict[str, Any]] | None = None,
+    news_items: list[dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, Any]]:
     ths_codes = {str(row.get("code") or "")[-6:] for row in (ths_hot or [])}
     em_codes = {str(row.get("code") or "")[-6:] for row in (em_hot or [])}
-    leading_industries = [str(row.get("name") or "") for row in (industries or [])[:15]]
-    leading_fund_boards = [str(row.get("name") or "") for row in (board_funds or [])[:15]]
     result: dict[str, dict[str, Any]] = {}
     for candidate in candidates:
         code = str(candidate.get("股票代码") or candidate.get("code") or "")[:6]
         theme = str(candidate.get("所属主题") or candidate.get("theme") or "")
         in_ths, in_em = code in ths_codes, code in em_codes
-        industry_match = any(name and (name in theme or theme in name) for name in leading_industries)
         concepts = concept_blocks.get(code, []) if concept_blocks is not None else []
-        concept_match = any(tag and (tag in theme or theme in tag) for tag in concepts)
-        fund_match = any(name and (name in theme or theme in name) for name in leading_fund_boards)
-        score = 40 + (20 if in_ths else 0) + (20 if in_em else 0)
-        score += 10 if in_ths and in_em else 0
-        score += 10 if industry_match else 0
-        score += 5 if concept_match else 0
-        score += 5 if fund_match else 0
+        tags = [tag for tag in [theme, *concepts] if tag]
+        matched_industries = [
+            row for row in (industries or [])
+            if any(tag in str(row.get("name") or "") or str(row.get("name") or "") in tag for tag in tags)
+        ]
+        matched_funds = [
+            row for row in (board_funds or [])
+            if any(tag in str(row.get("name") or "") or str(row.get("name") or "") in tag for tag in tags)
+        ]
+        industry_changes = [value for row in matched_industries if (value := _as_float(row.get("change_pct"))) is not None]
+        industry_score = max(0.0, min(100.0, 50.0 + max(industry_changes) * 5)) if industry_changes else None
+        fund_values = [value for row in matched_funds if (value := _as_float(row.get("main_net"))) is not None]
+        fund_score = (75.0 if max(fund_values) > 0 else 25.0) if fund_values else None
+        candidate_name = str(candidate.get("股票名称") or candidate.get("name") or "")
+        related_news = []
+        for news in news_items or []:
+            text = f"{news.get('title', '')} {news.get('snippet', '')}"
+            if (candidate_name and candidate_name in text) or any(tag and tag in text for tag in tags):
+                related_news.append(text)
+        news_score = None
+        if related_news:
+            news_text = " ".join(related_news)
+            positive = sum(term in news_text for term in ("增长", "中标", "订单", "增持", "突破", "景气", "利好"))
+            negative = sum(term in news_text for term in ("减持", "处罚", "下滑", "亏损", "风险", "调查", "退潮"))
+            news_score = max(0.0, min(100.0, 50.0 + positive * 10 - negative * 15))
+        theme_score = _weighted_score([(news_score, 0.35), (industry_score, 0.25), (fund_score, 0.40)])
         sources = [name for matched, name in ((in_ths, "同花顺热榜"), (in_em, "东方财富人气榜")) if matched]
-        verified_sources = len(sources) + (1 if industries is not None else 0) + (1 if concept_blocks is not None else 0) + (1 if board_funds is not None else 0)
+        verified_sources = sum(value is not None for value in (news_score, industry_score, fund_score))
         result[code] = {
-            "theme_resonance": min(100.0, float(score)) if sources or industry_match else None,
+            "theme_resonance": theme_score,
+            "market_theme_score": theme_score,
             "hot_sources": sources,
             "hot_source_count": len(sources),
-            "industry_breadth_match": industry_match,
+            "industry_breadth_match": bool(matched_industries),
             "concept_tags": concepts,
-            "concept_match": concept_match,
-            "board_fund_match": fund_match,
-            "coverage": round(verified_sources / 5, 2),
-            "verification": "多源共振" if len(sources) >= 2 else ("单源热度" if sources else "未验证"),
+            "concept_match": bool(concepts),
+            "board_fund_match": bool(matched_funds),
+            "news_sentiment_score": news_score,
+            "board_trend_score": industry_score,
+            "board_fund_score": fund_score,
+            "coverage": round(verified_sources / 3, 2),
+            "verification": "个股多维验证" if verified_sources >= 2 else ("单维验证" if verified_sources else "未验证"),
         }
     return result
 
@@ -211,6 +240,7 @@ def collect_market_context(
     candidates: list[dict[str, Any]],
     client: ResilientHttpClient | None = None,
     trade_date: str | None = None,
+    news_items: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     client = client or get_default_client()
     trade_date = trade_date or latest_weekday().strftime("%Y%m%d")
@@ -241,11 +271,7 @@ def collect_market_context(
             break
         concept_blocks[code] = tags
     sentiment = calculate_market_temperature(industries, limit_up, broken, limit_down)
-    resonance = calculate_theme_resonance(candidates, ths_hot, em_hot, industries, concept_blocks, board_funds)
-    for code, item in resonance.items():
-        item["market_theme_score"] = _weighted_score(
-            [(sentiment.get("market_temperature"), 0.45), (item.get("theme_resonance"), 0.55)]
-        )
+    resonance = calculate_theme_resonance(candidates, ths_hot, em_hot, industries, concept_blocks, board_funds, news_items)
     return {
         "trade_date": trade_date,
         "sentiment": sentiment,

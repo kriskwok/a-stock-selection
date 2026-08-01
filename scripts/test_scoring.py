@@ -10,24 +10,40 @@ from valuation import forward_pe, peg_ratio, score_valuations
 
 class ThresholdTests(unittest.TestCase):
     def test_requested_thresholds(self):
-        self.assertEqual(workflow.PREFERRED_MARKET_CAP_YI, 400.0)
+        self.assertEqual(workflow.MIN_MARKET_CAP_YI, 100.0)
         self.assertEqual(workflow.MIN_DAILY_AMOUNT_WAN, 50000.0)
 
-    def test_candidate_gate_and_preference(self):
+    def test_candidate_gate_preserves_discovery_order(self):
         rows = [
             {"股票代码": "000001.SZ", "股票名称": "甲"},
             {"股票代码": "000002.SZ", "股票名称": "乙"},
             {"股票代码": "000003.SZ", "股票名称": "丙"},
+            {"股票代码": "600001.SH", "股票名称": "ST丁"},
         ]
         quotes = {
             "000001": {"mcap_yi": 399, "amount_wan": 60000},
             "000002": {"mcap_yi": 401, "amount_wan": 50000},
             "000003": {"mcap_yi": 900, "amount_wan": 49999},
+            "600001": {"mcap_yi": 101, "amount_wan": 50001},
         }
         with patch.object(workflow, "_tencent_quotes", return_value=quotes):
             selected = workflow.enforce_candidate_constraints(rows)
-        self.assertEqual([row["股票代码"] for row in selected], ["000002.SZ", "000001.SZ"])
-        self.assertEqual(selected[0]["市值偏好"], "400亿以上")
+        self.assertEqual([row["股票代码"] for row in selected], ["000001.SZ", "000002.SZ", "600001.SH"])
+        self.assertNotIn("市值偏好", selected[0])
+
+    def test_market_cap_and_amount_do_not_change_technical_score(self):
+        base = {"short_momentum": 3, "momentum_10d": 6, "medium_momentum": 8, "long_momentum": 10,
+                "close": 11, "ma5": 10.8, "ma10": 10.5, "ma20": 10, "volume_ratio_5d": 1.3}
+        small = dict(base, market_cap_yi=101, amount_wan=50000)
+        large = dict(base, market_cap_yi=5000, amount_wan=900000)
+        self.assertEqual(workflow.calculate_technical_score(small), workflow.calculate_technical_score(large))
+
+    def test_five_and_ten_day_trends_outweigh_longer_trends(self):
+        short_strong = {"short_momentum": 4, "momentum_10d": 8, "medium_momentum": -2, "long_momentum": -3,
+                        "close": 11, "ma5": 10.8, "ma10": 10.5, "ma20": 10, "volume_ratio_5d": 1.3}
+        long_strong = {"short_momentum": -2, "momentum_10d": -3, "medium_momentum": 12, "long_momentum": 20,
+                       "close": 9.5, "ma5": 9.8, "ma10": 10, "ma20": 9, "volume_ratio_5d": 1.0}
+        self.assertGreater(workflow.calculate_technical_score(short_strong), workflow.calculate_technical_score(long_strong))
 
 
 class MarketScoringTests(unittest.TestCase):
@@ -40,13 +56,27 @@ class MarketScoringTests(unittest.TestCase):
         self.assertGreater(result["market_temperature"], 60)
         self.assertEqual(result["break_rate_pct"], 20.0)
 
-    def test_cross_source_resonance(self):
+    def test_hot_list_membership_is_evidence_not_score(self):
         candidates = [{"股票代码": "000001.SZ", "所属主题": "银行"}]
         result = calculate_theme_resonance(
             candidates, [{"code": "000001"}], [{"code": "000001"}], [{"name": "银行"}]
         )
-        self.assertEqual(result["000001"]["theme_resonance"], 100.0)
+        self.assertIsNone(result["000001"]["theme_resonance"])
         self.assertEqual(result["000001"]["hot_source_count"], 2)
+
+    def test_candidate_specific_news_board_and_funds_can_score(self):
+        result = calculate_theme_resonance(
+            [{"股票代码": "000001.SZ", "股票名称": "甲", "所属主题": "银行"}],
+            None,
+            None,
+            [{"name": "银行", "change_pct": 2}],
+            {"000001": ["银行"]},
+            [{"name": "银行", "main_net": 100}],
+            [{"title": "银行板块景气增长", "snippet": "甲获得订单"}],
+        )["000001"]
+        self.assertIsNotNone(result["market_theme_score"])
+        self.assertIsNotNone(result["news_sentiment_score"])
+        self.assertIsNotNone(result["board_fund_score"])
 
 
 class ValuationTests(unittest.TestCase):

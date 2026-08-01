@@ -28,6 +28,12 @@ class MarketRouteTests(unittest.TestCase):
         with patch.object(workflow, "get_default_client", side_effect=AssertionError("no network")):
             self.assertIsNone(workflow.verified_a_share_trade_date(datetime(2026, 7, 26, 9, 30)))
 
+    def test_non_trading_replay_uses_latest_verified_session(self):
+        replay = workflow.verified_a_share_trade_date(
+            datetime(2026, 7, 26, 9, 30), allow_previous=True
+        )
+        self.assertEqual(replay.date().isoformat(), "2026-07-24")
+
     def test_trade_check_uses_verified_exchange_calendar(self):
         self.assertEqual(workflow.verified_a_share_trade_date(datetime(2026, 7, 27, 9, 30)).date().isoformat(), "2026-07-27")
 

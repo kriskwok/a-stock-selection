@@ -39,7 +39,7 @@ class DegradationAndRankingTests(unittest.TestCase):
     def test_missing_score_components_are_not_default_fifty(self):
         result = compose_rankings(
             [{"股票代码": "000001.SZ", "股票名称": "甲", "技术结构分": 80}],
-            {"sentiment": {}, "theme_resonance": {}},
+            {"sentiment": {"market_temperature": 95}, "theme_resonance": {}},
             {"000001": {"growth_valuation_score": None, "valuation_coverage": 0}},
             {"000001": {"risk_penalty": 0, "coverage": 0}},
             formal=False,
@@ -65,6 +65,36 @@ class ReportPresentationTests(unittest.TestCase):
 
 
 class IndependentTrendSourceTests(unittest.TestCase):
+    def test_theme_discovery_uses_market_sources_without_news(self):
+        with patch.object(workflow, "interpret_hotspots", side_effect=AssertionError("news must not be read")):
+            names = workflow.dynamic_theme_names(
+                ths_reason_rows=[{"reason": "先进封装+半导体"}],
+                ths_hot_rows=[{"所属主题": "算力"}],
+                board_movers=[{"name": "创新药", "change_pct": 3.2, "mover_side": "涨幅前五"}],
+            )
+        self.assertTrue({"先进封装", "半导体", "算力"}.issubset(names))
+        self.assertIn("创新药", names)
+
+    def test_market_theme_rows_mark_fallback_as_single_source(self):
+        rows = workflow.market_theme_rows(
+            ths_reason_rows=[],
+            ths_hot_rows=[],
+            board_movers=[{"name": "跌幅题材", "change_pct": -4.0, "mover_side": "跌幅前五"}],
+        )
+        self.assertEqual(rows[0]["验证状态"], "单源市场数据")
+        self.assertIn("一日游", rows[0]["选股处理"])
+        self.assertIn("跌幅前五", rows[0]["风险信号"])
+
+    def test_xueqiu_prefixed_code_is_normalized(self):
+        self.assertEqual(workflow.normalize_stock_code("SH600519"), "600519.SH")
+
+    def test_board_movers_include_both_ends_without_scoring(self):
+        catalog = [{"code": str(index), "name": f"板块{index}", "change_pct": float(index), "type": "concept"} for index in range(12)]
+        rows = workflow._board_movers(limit=5, board_catalog=catalog)
+        self.assertEqual(sum(row["mover_side"] == "涨幅前五" for row in rows), 5)
+        self.assertEqual(sum(row["mover_side"] == "跌幅前五" for row in rows), 5)
+        self.assertTrue(all("score" not in row for row in rows))
+
     def test_ths_jsonp_daily_history_parses_close_high_volume(self):
         text = 'quotebridge_v6_line_hs_000001_01_last({"data":"20260102,10,11,9,10.5,100,1050;20260105,10.5,12,10,11,120,1320"})'
         rows = workflow._parse_ths_history_payload(text)
@@ -82,27 +112,21 @@ class IndependentTrendSourceTests(unittest.TestCase):
         ):
             result = workflow._trend_metrics("000001", {"price": 79.0})
         self.assertEqual(result["history_source"], "同花顺K线独立备源")
+        self.assertIsNotNone(result["return_10"])
+        self.assertIsNotNone(result["ma5"])
+        self.assertIsNotNone(result["ma10"])
         self.assertIsNotNone(result["ma60"])
 
-    def test_candidate_universe_does_not_require_eastmoney_board(self):
-        quotes = {
-            "300308": {"mcap_yi": 500, "amount_wan": 60000},
-            "300502": {"mcap_yi": 500, "amount_wan": 60000},
-            "300394": {"mcap_yi": 500, "amount_wan": 60000},
-            "601138": {"mcap_yi": 500, "amount_wan": 60000},
-            "000977": {"mcap_yi": 500, "amount_wan": 60000},
-            "000938": {"mcap_yi": 500, "amount_wan": 60000},
-            "002463": {"mcap_yi": 500, "amount_wan": 60000},
-            "002281": {"mcap_yi": 500, "amount_wan": 60000},
-            "688256": {"mcap_yi": 500, "amount_wan": 60000},
-            "002371": {"mcap_yi": 500, "amount_wan": 60000},
-        }
-        with patch.object(workflow, "_latest_ths_hot_rows", return_value=("2026-07-21", [])), patch.object(
-            workflow, "_tencent_quotes", return_value=quotes
-        ), patch.object(workflow, "_eastmoney_board_catalog", side_effect=AssertionError("must not call Eastmoney")):
-            response = workflow.free_candidates(["AI算力", "半导体"])
+    def test_hot_lists_enter_dynamic_candidate_pool_without_fixed_fallback(self):
+        ths = [{"股票代码": "000001.SZ", "股票名称": "甲", "候选来源": "同花顺热股", "所属主题": "今日题材"}]
+        xq = [{"股票代码": "000002.SZ", "股票名称": "乙", "候选来源": "雪球热股", "所属主题": ""}]
+        with patch.object(workflow, "_ths_hot_stocks", return_value=ths), patch.object(
+            workflow, "_xueqiu_hot_stocks", return_value=xq
+        ):
+            response = workflow.free_candidates(["今日题材"], ths_reason_rows=[], board_movers=[], board_catalog=[])
         self.assertTrue(response["result"])
-        self.assertIn("内置主题池", response["result"][0]["source"])
+        self.assertEqual([row["股票代码"] for row in response["candidates"]], ["000001.SZ", "000002.SZ"])
+        self.assertNotIn("内置主题池", response["result"][0]["source"])
 
 
 if __name__ == "__main__":

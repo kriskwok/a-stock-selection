@@ -54,14 +54,11 @@ def compose_rankings(
     formal: bool,
 ) -> list[dict[str, Any]]:
     resonance = market_context.get("theme_resonance") or {}
-    market_temperature = (market_context.get("sentiment") or {}).get("market_temperature")
     combined = []
     for technical_rank, candidate in enumerate(technical_candidates, 1):
         code = str(candidate.get("股票代码") or "")[:6]
         market = resonance.get(code, {})
         market_score = market.get("market_theme_score")
-        if market_score is None and market_temperature is not None:
-            market_score = market_temperature
         valuation = valuations.get(code, {})
         valuation_score = valuation.get("growth_valuation_score")
         risk = risks.get(code, {})
